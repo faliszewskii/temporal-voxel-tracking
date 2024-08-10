@@ -4,13 +4,15 @@ import numpy as np
 from vtk.util import numpy_support
 import random
 
+from generated_data import GeneratedData
+
 
 class DataGenerator:
 
     def __init__(self):
         pass
 
-    def generate_data(self, frame_count, data_func):
+    def generate_data(self, frame_count, data_func, tracker):
         sequence_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSequenceNode")
         sequence_node.SetName("Generated Data Sequence")
         sequence_node.SetIndexName("frames")
@@ -24,7 +26,7 @@ class DataGenerator:
         dimensions = (64, 64, 64)
 
         for i in range(frame_count):
-            data_vtk = numpy_support.numpy_to_vtk(num_array=data_func(dimensions, i).ravel(), deep=True, array_type=vtk.VTK_FLOAT)
+            data_vtk = numpy_support.numpy_to_vtk(num_array=data_func(dimensions, i).ravel(order='F'), deep=True, array_type=vtk.VTK_FLOAT)
 
             image_data = vtk.vtkImageData()
             image_data.SetDimensions(dimensions)
@@ -38,7 +40,7 @@ class DataGenerator:
             volume_node.SetAndObserveImageData(image_data)
 
             sequence_node.SetDataNodeAtValue(volume_node, str(i))
-
+        return GeneratedData(sequence_node, seq_browser, tracker)
 
     @staticmethod
     def linear_cube_data(dimensions, i, delta):
@@ -74,23 +76,31 @@ class DataGenerator:
         print("Generating static cube...")
         frame_count = 10
         def f(x): return np.array([0.0, 0.0, 0.0])
-        self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]))
+        def tracker(p0, t_p0, t) :
+            return p0
+        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
 
     def generate_slow_cube(self):
         print("Generating slow cube...")
         frame_count = 10
-        def f(x): return x * np.array([1.0, 0.0, 0.0])
-        self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]))
+        def f(x): return x * np.array([0.0, 0.0, 1.0])
+        def tracker(p0, t_p0, t) :
+            return p0 + f(t - t_p0)
+        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
 
     def generate_faster_cube(self):
         print("Generating faster cube...")
         frame_count = 10
         def f(x): return x * np.array([2.0, 0.0, 0.0])
-        self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]))
+        def tracker(p0, t_p0, t) :
+            return p0 + f(t - t_p0)
+        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
 
     def generate_random_cube(self):
         print("Generating random cube...")
         frame_count = 10
         current_pos = [0.0, 0.0, 0.0]
         def f(x): return 10 * np.array([random.random(), random.random(), random.random()]) + current_pos
-        self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]))
+        def tracker(p0, t_p0, t) :
+            return None
+        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)

@@ -374,27 +374,50 @@ class TemporalVoxelTrackingEngine:
         markups_node.SetName(id_track_point)
         markups_node.GetDisplayNode().SetSelectedColor(1, 0, 0)
         markups_node.GetDisplayNode().SetColor(1, 1, 0)
-        x = starting_coords[0]
-        y = starting_coords[1]
-        z = starting_coords[2]
-        coords = self.changeBasis([x, y, z], ijk_to_ras_matrix)
-        markups_node.AddControlPoint(*coords)
-        current_frame = 0  # TODO # Assume first
-        for i in range(frame_count - 1):
-            t = (i - current_frame)
-            optical_flow = optical_flow_frames[t][int(math.floor(x))][int(math.floor(y))][int(math.floor(z))]
-            x += optical_flow[0]
-            y += optical_flow[1]
-            z += optical_flow[2]
-            coords = self.changeBasis([x, y, z], ijk_to_ras_matrix)
-            markups_node.AddControlPoint(*coords)
 
-        for i in range(markups_node.GetNumberOfControlPoints()):
+        points = np.zeros((frame_count, 3))
+
+        # Current frame
+        points[current_frame] = np.array(starting_coords)
+
+        # Previous frames
+        track_vector = np.array(starting_coords)
+        best_vector = track_vector.copy()
+        # Previous frames
+        for i in range(current_frame):
+            t = current_frame - i - 1
+            optical_flow = optical_flow_frames[t]
+            minDist = float("inf")
+            for x in range(optical_flow.shape[0]):
+                for y in range(optical_flow.shape[1]):
+                    for z in range(optical_flow.shape[2]):
+                        optical_flow_value = optical_flow[x][y][z]
+                        next_vector = track_vector - np.array(optical_flow_value)
+                        dist = np.linalg.norm(next_vector - np.array([x, y, z]))
+                        if dist < minDist:
+                            minDist = dist
+                            best_vector = next_vector
+            track_vector = best_vector
+            points[t] = track_vector
+
+        # Forward frames
+        forward_vector = np.array(starting_coords)
+        for i in range(frame_count - current_frame - 1):
+            t = (i + current_frame)
+            optical_flow = optical_flow_frames[t][int(math.floor(forward_vector[0]))][int(math.floor(forward_vector[1]))][int(math.floor(forward_vector[2]))]
+            forward_vector += np.array(optical_flow)
+            points[t + 1] = forward_vector
+
+        for i in range(len(points)):
+            coords = self.changeBasis(points[i], ijk_to_ras_matrix)
+            markups_node.AddControlPoint(*coords)
             markups_node.SetNthControlPointLabel(i, f"{i}")
 
         display_node = markups_node.GetDisplayNode()
         display_node.SetOccludedVisibility(True)
         display_node.SetOccludedOpacity(0.6)
+
+        return points
 
     def getFrames(self):
         sequence_browser_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceBrowserNode')
@@ -423,7 +446,34 @@ class TemporalVoxelTrackingEngine:
         fiducial_node.GetNthControlPointPosition(0, coords)
         return self.changeBasis(coords, ras_to_ijk_matrix)
 
-    def start_tracking_point(self, fiducial_node, frames=-1):
+    def compare_to_truth(self, points, tracker, starting_coords, current_frame):
+        sum_error = 0
+        min_error = float("inf")
+        max_error = float("-inf")
+        for i in range(len(points)):
+            error = (np.linalg.norm(points[i] - tracker(starting_coords, current_frame, i))) ** 2
+            sum_error += error
+            if error > max_error:
+                max_error = error
+            if error < min_error:
+                min_error = error
+        print(f"Error: {sum_error}, min: {min_error}, max: {max_error}")
+
+        ijk_to_ras_matrix = self.getIJK2RASMatrix()
+        markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        markups_node.SetName("Ground Truth")
+        markups_node.GetDisplayNode().SetSelectedColor(0, 1, 1)
+        markups_node.GetDisplayNode().SetColor(0, 1, 0)
+        for i in range(len(points)):
+            coords = self.changeBasis(tracker(starting_coords, current_frame, i), ijk_to_ras_matrix)
+            markups_node.AddControlPoint(*coords)
+            markups_node.SetNthControlPointLabel(i, f"GT:{i}")
+
+        display_node = markups_node.GetDisplayNode()
+        display_node.SetOccludedVisibility(True)
+        display_node.SetOccludedOpacity(0.6)
+
+    def start_tracking_point(self, fiducial_node, tracker):
         starting_coords = self.getPointCoords(fiducial_node)
         if not starting_coords:
             return
@@ -431,9 +481,8 @@ class TemporalVoxelTrackingEngine:
         if getNodes(id_track_point, None):
             slicer.mrmlScene.RemoveNode(getNode(id_track_point))
         [current_frame, frame_count] = self.getFrames()
-        if frames == -1:
-            frames = frame_count
-        self.generateTrack(starting_coords, current_frame, frames, self.optical_flow_sequence)
+        points = self.generateTrack(starting_coords, current_frame, frame_count, self.optical_flow_sequence)
+        self.compare_to_truth(points, tracker, starting_coords, current_frame)
 
     def track_point(self):
         [current_frame, frame_count] = self.getFrames()

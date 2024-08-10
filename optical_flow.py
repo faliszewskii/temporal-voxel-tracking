@@ -31,7 +31,7 @@ def compute_optical_flow(current_frame, next_frame):  # Takes a 3d numpy array
         m_v_x = scipy.signal.convolve(v_x, kern, mode='same')
         m_v_y = scipy.signal.convolve(v_y, kern, mode='same')
         m_v_z = scipy.signal.convolve(v_z, kern, mode='same')
-        if it % int(iterations/10) == 0:
+        if iterations < 10 or it % int(iterations/10) == 0:
             print(f'{it},')
     res = np.stack((v_z, v_y, v_x), axis=-1)
     return res

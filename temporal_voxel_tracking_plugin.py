@@ -9,6 +9,7 @@ import numpy as np
 
 class TemporalVoxelTrackingPlugin:
     def __init__(self, parent=None):
+        self.current_data = None
         self.temporal_voxel_tracking_engine = tvt.TemporalVoxelTrackingEngine()
         self.data_generator = dg.DataGenerator()
         self.parent = parent  # Parent widget (usually the main window)
@@ -49,10 +50,13 @@ class TemporalVoxelTrackingPlugin:
         self.add_action(track_menu, "Track Volume", self.on_track_volume_action_triggered)
         self.add_action(track_menu, "Track Mesh", self.on_track_mesh_action_triggered)
 
-        self.add_action(generate_menu, "Generate Static Cube", self.data_generator.generate_static_cube)
-        self.add_action(generate_menu, "Generate Slow Cube", self.data_generator.generate_slow_cube)
-        self.add_action(generate_menu, "Generate Faster Cube", self.data_generator.generate_faster_cube)
-        self.add_action(generate_menu, "Generate Random Cube", self.data_generator.generate_random_cube)
+        self.add_action(generate_menu, "Generate Static Cube", lambda _: self.generate(self.data_generator.generate_static_cube))
+        self.add_action(generate_menu, "Generate Slow Cube", lambda _: self.generate(self.data_generator.generate_slow_cube))
+        self.add_action(generate_menu, "Generate Faster Cube", lambda _: self.generate(self.data_generator.generate_faster_cube))
+        self.add_action(generate_menu, "Generate Random Cube", lambda _: self.generate(self.data_generator.generate_random_cube))
+
+    def generate(self, func):
+        self.current_data = func()
 
     def on_show_magnitudes_action_triggered(self):
         selected_node = slicer.mrmlScene.GetNodeByID(slicer.app.layoutManager().sliceWidget('Red').sliceLogic().GetBackgroundLayer().GetVolumeNode().GetID())
@@ -80,7 +84,7 @@ class TemporalVoxelTrackingPlugin:
             return None
         selected_node = slicer.mrmlScene.GetNodeByID(active_place_node_id)
         if selected_node and selected_node.IsA('vtkMRMLMarkupsFiducialNode'):
-            self.temporal_voxel_tracking_engine.start_tracking_point(selected_node)
+            self.temporal_voxel_tracking_engine.start_tracking_point(selected_node, self.current_data.tracking_function)
         else:
             print("no node selected")
 
