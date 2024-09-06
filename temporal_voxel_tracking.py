@@ -372,6 +372,7 @@ class TemporalVoxelTrackingEngine:
         ijk_to_ras_matrix = self.getIJK2RASMatrix()
         markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
         markups_node.SetName(id_track_point)
+        markups_node.GetDisplayNode().SetGlyphScale(1.5)
         markups_node.GetDisplayNode().SetSelectedColor(1, 0, 0)
         markups_node.GetDisplayNode().SetColor(1, 1, 0)
 
@@ -447,27 +448,32 @@ class TemporalVoxelTrackingEngine:
         return self.changeBasis(coords, ras_to_ijk_matrix)
 
     def compare_to_truth(self, points, tracker, starting_coords, current_frame):
-        sum_error = 0
+        sqm_error = 0
         min_error = float("inf")
         max_error = float("-inf")
         for i in range(len(points)):
-            error = (np.linalg.norm(points[i] - tracker(starting_coords, current_frame, i))) ** 2
-            sum_error += error
+            error = np.linalg.norm(points[i] - tracker(starting_coords, current_frame, i))
+            sqm_error += error ** 2
             if error > max_error:
                 max_error = error
             if error < min_error:
                 min_error = error
-        print(f"Error: {sum_error}, min: {min_error}, max: {max_error}")
+        sqm_error = math.sqrt(sqm_error / len(points))
+        print(f"Root mean square error: {sqm_error}, min: {min_error}, max: {max_error}")
 
         ijk_to_ras_matrix = self.getIJK2RASMatrix()
+
+        if getNodes("Ground Truth", None):
+            slicer.mrmlScene.RemoveNode(getNode("Ground Truth"))
         markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        markups_node.GetDisplayNode().SetGlyphScale(1.5)
         markups_node.SetName("Ground Truth")
         markups_node.GetDisplayNode().SetSelectedColor(0, 1, 1)
-        markups_node.GetDisplayNode().SetColor(0, 1, 0)
+        markups_node.GetDisplayNode().SetColor(0, 1, 0.5)
         for i in range(len(points)):
             coords = self.changeBasis(tracker(starting_coords, current_frame, i), ijk_to_ras_matrix)
             markups_node.AddControlPoint(*coords)
-            markups_node.SetNthControlPointLabel(i, f"GT:{i}")
+            markups_node.SetNthControlPointLabel(i, f"{i}")
 
         display_node = markups_node.GetDisplayNode()
         display_node.SetOccludedVisibility(True)
@@ -487,5 +493,8 @@ class TemporalVoxelTrackingEngine:
     def track_point(self):
         [current_frame, frame_count] = self.getFrames()
         fiducial_node = getNode(id_track_point)
+        fiducial_node_gt = getNode("Ground Truth")
         for i in range(frame_count):
             fiducial_node.SetNthControlPointSelected(i, i == current_frame)
+            fiducial_node_gt.SetNthControlPointSelected(i, i == current_frame)
+

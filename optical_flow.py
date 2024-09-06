@@ -15,7 +15,7 @@ def compute_optical_flow(current_frame, next_frame):  # Takes a 3d numpy array
 
     mean_size = 5
     kern = np.ones((mean_size, mean_size, mean_size)) / mean_size**3
-    alpha = 10
+    alpha = 1
     iterations = 100
     v_x = np.zeros((dim[0], dim[1], dim[2]))
     v_y = np.zeros((dim[0], dim[1], dim[2]))
