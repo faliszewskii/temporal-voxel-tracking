@@ -36,26 +36,30 @@ class TemporalVoxelTrackingPlugin:
     def add_actions_to_menu_bar(self):
         main_menu_bar = self.parent.menuBar()
 
-        track_menu = main_menu_bar.addMenu("Track")
-        track_menu.setObjectName("TrackMenu")
+        optical_flow_menu = main_menu_bar.addMenu("Optical Flow")
+        optical_flow_menu.setObjectName("TrackMenu")
         generate_menu = main_menu_bar.addMenu("Generate")
         generate_menu.setObjectName("GenerateMenu")
+        dvc_menu = main_menu_bar.addMenu("DVC")
+        dvc_menu.setObjectName("DVCMenu")
 
-        self.add_action(track_menu, "Calculate optical flow for selected", self.on_calculate_optical_flow_action_triggered)
-        track_menu.addSeparator()
-        self.add_action(track_menu, "Show Optical Flow Magnitudes", self.on_show_magnitudes_action_triggered)
-        self.add_action(track_menu, "Show Optical Flow Vectors", self.on_show_vectors_action_triggered)
-        track_menu.addSeparator()
-        self.add_action(track_menu, "Track Point", self.on_track_point_action_triggered)
-        self.add_action(track_menu, "Track Volume", self.on_track_volume_action_triggered)
-        self.add_action(track_menu, "Track Mesh", self.on_track_mesh_action_triggered)
+        self.add_action(optical_flow_menu, "Calculate optical flow for selected", self.on_calculate_optical_flow_action_triggered)
+        optical_flow_menu.addSeparator()
+        self.add_action(optical_flow_menu, "Show Optical Flow Magnitudes", self.on_show_magnitudes_action_triggered)
+        self.add_action(optical_flow_menu, "Show Optical Flow Vectors", self.on_show_vectors_action_triggered)
+        optical_flow_menu.addSeparator()
+        self.add_action(optical_flow_menu, "Track Point", self.on_track_point_action_triggered)
+        self.add_action(optical_flow_menu, "Track Volume", self.on_track_volume_action_triggered)
+        self.add_action(optical_flow_menu, "Track Mesh", self.on_track_mesh_action_triggered)
 
         self.add_action(generate_menu, "Generate Static Cube", lambda _: self.generate(self.data_generator.generate_static_cube))
         self.add_action(generate_menu, "Generate Slow Cube", lambda _: self.generate(self.data_generator.generate_slow_cube))
         self.add_action(generate_menu, "Generate Faster Cube", lambda _: self.generate(self.data_generator.generate_faster_cube))
         self.add_action(generate_menu, "Generate Random Cube", lambda _: self.generate(self.data_generator.generate_random_cube))
-        track_menu.addSeparator()
+        generate_menu.addSeparator()
         self.add_action(generate_menu, "Generate Pulsating Cylinder", lambda _: self.generate(self.data_generator.generate_pulsating_cylinder))
+
+        self.add_action(dvc_menu, "Track Point", self.on_dvc_track_point_action_triggered)
 
     def generate(self, func):
         self.current_data = func()
@@ -87,6 +91,16 @@ class TemporalVoxelTrackingPlugin:
         selected_node = slicer.mrmlScene.GetNodeByID(active_place_node_id)
         if selected_node and selected_node.IsA('vtkMRMLMarkupsFiducialNode'):
             self.temporal_voxel_tracking_engine.start_tracking_point(selected_node, self.current_data.tracking_function)
+        else:
+            print("no node selected")
+
+    def on_dvc_track_point_action_triggered(self):
+        active_place_node_id = slicer.util.getNode('vtkMRMLSelectionNodeSingleton').GetActivePlaceNodeID()
+        if not active_place_node_id:
+            return None
+        selected_node = slicer.mrmlScene.GetNodeByID(active_place_node_id)
+        if selected_node and selected_node.IsA('vtkMRMLMarkupsFiducialNode'):
+            self.temporal_voxel_tracking_engine.dvc_track_point(selected_node)
         else:
             print("no node selected")
 

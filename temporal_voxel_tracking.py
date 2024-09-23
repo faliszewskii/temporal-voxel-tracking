@@ -6,6 +6,7 @@ import vtk
 from vtk.util import numpy_support
 from slicer.util import getNode, getNodes
 import optical_flow as of
+import voxel_tracker as vt
 
 # Identifiers
 id_start_tracking_point = 'start_tracking_point'
@@ -152,6 +153,7 @@ def display_transform(transform_node):
 class TemporalVoxelTrackingEngine:
     def __init__(self):
         self.optical_flow_sequence = []
+        self.vt = vt.VoxelTracker()
 
     def create_displacement_map(self):
         self.optical_flow_sequence.clear()
@@ -493,8 +495,44 @@ class TemporalVoxelTrackingEngine:
     def track_point(self):
         [current_frame, frame_count] = self.getFrames()
         fiducial_node = getNode(id_track_point)
-        fiducial_node_gt = getNode("Ground Truth")
+        # fiducial_node_gt = getNode("Ground Truth")
         for i in range(frame_count):
             fiducial_node.SetNthControlPointSelected(i, i == current_frame)
-            fiducial_node_gt.SetNthControlPointSelected(i, i == current_frame)
+            # fiducial_node_gt.SetNthControlPointSelected(i, i == current_frame)
 
+    def dvc_track_point(self, fiducial_node):
+        starting_coords = self.getPointCoords(fiducial_node)
+        if not starting_coords:
+            return
+        slicer.mrmlScene.RemoveNode(fiducial_node)
+        if getNodes(id_track_point, None):
+            slicer.mrmlScene.RemoveNode(getNode(id_track_point))
+        [current_frame, frame_count] = self.getFrames()
+
+        ijk_to_ras_matrix = self.getIJK2RASMatrix()
+        markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        markups_node.SetName(id_track_point)
+        markups_node.GetDisplayNode().SetGlyphScale(1.5)
+        markups_node.GetDisplayNode().SetSelectedColor(1, 0, 0)
+        markups_node.GetDisplayNode().SetColor(1, 1, 0)
+
+        sequence_node = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLSequenceNode')
+
+        frames = []
+        for t in range(frame_count):
+            current_volume = sequence_node.GetNthDataNode(t)
+            dims = current_volume.GetImageData().GetDimensions()
+            current_array = numpy_support.vtk_to_numpy(current_volume.GetImageData().GetPointData().GetScalars())
+            current_array = current_array.reshape((dims[0], dims[1], dims[2]), order='F')
+            frames.append(current_array)
+
+        points = self.vt.track(frames, current_frame, starting_coords)
+
+        for i in range(len(points)):
+            coords = self.changeBasis(points[i], ijk_to_ras_matrix)
+            markups_node.AddControlPoint(*coords)
+            markups_node.SetNthControlPointLabel(i, f"{i}")
+
+        display_node = markups_node.GetDisplayNode()
+        display_node.SetOccludedVisibility(True)
+        display_node.SetOccludedOpacity(0.6)
