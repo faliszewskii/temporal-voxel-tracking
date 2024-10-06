@@ -60,7 +60,7 @@ class DigitalVolumeCorrelation():
         reference_window = (x + grid[0], y + grid[1], z + grid[2])
         deformed_window = (x + grid[0] + u + dux * grid[0] + duy * grid[1] + duz * grid[2],
                            y + grid[1] + v + dvx * grid[0] + dvy * grid[1] + dvz * grid[2],
-                           z + grid[2] + w + dwz * grid[0] + dwy * grid[1] + dwz * grid[2])
+                           z + grid[2] + w + dwx * grid[0] + dwy * grid[1] + dwz * grid[2])
 
         window1 = interpolatedReference(reference_window, method="linear")  # quintic
         window2 = interpolatedDeformed(deformed_window, method="linear")  # quintic
