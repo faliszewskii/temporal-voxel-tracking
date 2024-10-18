@@ -60,6 +60,7 @@ class TemporalVoxelTrackingPlugin:
         self.add_action(generate_menu, "Generate Pulsating Cylinder", lambda _: self.generate(self.data_generator.generate_pulsating_cylinder))
 
         self.add_action(dvc_menu, "Track Point", self.on_dvc_track_point_action_triggered)
+        self.add_action(dvc_menu, "Test tracking - point", self.on_dvc_test_point_action_triggered)
 
     def generate(self, func):
         self.current_data = func()
@@ -100,9 +101,35 @@ class TemporalVoxelTrackingPlugin:
             return None
         selected_node = slicer.mrmlScene.GetNodeByID(active_place_node_id)
         if selected_node and selected_node.IsA('vtkMRMLMarkupsFiducialNode'):
-            self.temporal_voxel_tracking_engine.dvc_track_point(selected_node)
+            self.temporal_voxel_tracking_engine.dvc_track_fiducial_node(selected_node)
         else:
             print("no node selected")
+
+    def on_dvc_test_point_action_triggered(self):
+        pointsA = [
+            (-28.097206, -10.121669, 37.682655),
+            (-30.234774, -8.469118, 33.840611),
+            (-31.945389, -4.917310, 28.385954),
+            (-32.057339, -3.572445, 26.841396),
+            (-31.740509, -3.664992, 27.248146),
+            (-31.628189, -5.967639, 29.815594),
+            (-31.648130, -8.259072, 32.242516),
+            (-30.955448, -9.622770, 34.371704),
+            (-28.858099, -10.093299, 36.912762)
+        ]
+        pointsB = [
+            (-30.142559, -10.356653, 31.015547),
+            (-29.794868, -10.037838, 30.927279),
+            (-31.184607, -3.484786, 24.132965),
+            (-31.884451, -7.143429, 27.065422),
+            (-30.934578, -2.063097, 22.980680),
+            (-31.506128, -2.228712, 22.798498),
+            (-32.443405, -3.587524, 23.492443),
+            (-31.370991, -9.353150, 29.382631),
+            (-31.766310, -6.360522, 26.419477),
+            (-32.516121, -5.252571, 24.970381)
+        ]
+        self.temporal_voxel_tracking_engine.test_points(pointsA)
 
     def on_track_volume_action_triggered(self):
         todo()

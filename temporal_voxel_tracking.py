@@ -10,6 +10,7 @@ import voxel_tracker as vt
 
 # Identifiers
 id_start_tracking_point = 'start_tracking_point'
+id_ground_truth = 'ground_truth'
 id_track_point = 'track_point'
 id_start_tracking_volume = 'start_tracking_volume'
 
@@ -500,11 +501,37 @@ class TemporalVoxelTrackingEngine:
             fiducial_node.SetNthControlPointSelected(i, i == current_frame)
             # fiducial_node_gt.SetNthControlPointSelected(i, i == current_frame)
 
-    def dvc_track_point(self, fiducial_node):
-        starting_coords = self.getPointCoords(fiducial_node)
-        if not starting_coords:
-            return
-        slicer.mrmlScene.RemoveNode(fiducial_node)
+    def test_points(self, points):
+        # points[:] = [[x / 10 for x in coord] for coord in points]
+
+        sequence_node = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLSequenceNode')
+        current_volume = sequence_node.GetNthDataNode(0)
+        dims = current_volume.GetImageData().GetDimensions()
+
+        points[:] = [[coord[i]/10 + dims[i]/2  for i in range(3)] for coord in points]
+
+        # Draw the points. Maybe factor out into a function.
+
+        markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        markups_node.SetName(id_ground_truth)
+        markups_node.GetDisplayNode().SetGlyphScale(1.5)
+        markups_node.GetDisplayNode().SetSelectedColor(1, 0, 0)
+        markups_node.GetDisplayNode().SetColor(0, 1, 0)
+
+        ijk_to_ras_matrix = self.getIJK2RASMatrix()
+        for i in range(len(points)):
+            coords = self.changeBasis(points[i], ijk_to_ras_matrix)
+            markups_node.AddControlPoint(*coords)
+            markups_node.SetNthControlPointLabel(i, f"GT{i}")
+
+        display_node = markups_node.GetDisplayNode()
+        display_node.SetOccludedVisibility(True)
+        display_node.SetOccludedOpacity(0.6)
+
+        # Algorithm's deduction
+        self.dvc_track_point(points[0])
+
+    def dvc_track_point(self, starting_coords):
         if getNodes(id_track_point, None):
             slicer.mrmlScene.RemoveNode(getNode(id_track_point))
         [current_frame, frame_count] = self.getFrames()
@@ -536,3 +563,10 @@ class TemporalVoxelTrackingEngine:
         display_node = markups_node.GetDisplayNode()
         display_node.SetOccludedVisibility(True)
         display_node.SetOccludedOpacity(0.6)
+
+    def dvc_track_fiducial_node(self, fiducial_node):
+        starting_coords = self.getPointCoords(fiducial_node)
+        if not starting_coords:
+            return
+        slicer.mrmlScene.RemoveNode(fiducial_node)
+        self.dvc_track_point(starting_coords)
