@@ -290,8 +290,8 @@ class DicTest(unittest.TestCase):
         im2 = np.zeros(dim, dtype=np.float32)
         center = np.array([d / 2 for d in dim])
 
-        def func(x, y, f, translation):
-            radius = np.sqrt((x - center[0] - translation[0]) ** 2 + (y - center[1] - translation[1]) ** 2)
+        def func(x, y, f, translation, scale):
+            radius = np.sqrt((x - center[0] - translation[0]) ** 2 + scale * (y - center[1] - translation[1]) ** 2)
             mask = radius > r_func(f)
             values = np.where(mask, 0, radius / r_func(f))
             noise = np.array([[random.random() * noise_amp for i in range(dim[0])] for j in range(dim[1])])
@@ -309,8 +309,8 @@ class DicTest(unittest.TestCase):
         x_range = np.arange(start_x, end_x)
         y_range = np.arange(start_y, end_y)
         X, Y = np.meshgrid(x_range, y_range, indexing='ij')
-        im1[start_x:end_x, start_y:end_y] = func(X, Y, 0, translation1)
-        im2[start_x:end_x, start_y:end_y] = func(X, Y, 5, translation2)
+        im1[start_x:end_x, start_y:end_y] = func(X, Y, 0, translation1, 1)
+        im2[start_x:end_x, start_y:end_y] = func(X, Y, 5, translation2, 4)
 
         # cc = self.find_max_cross_correlation_integer(im1, im2, (x, y), window_size)
         # i, j = np.unravel_index(cc.argmax(), cc.shape)
@@ -397,13 +397,13 @@ class DicTest(unittest.TestCase):
                                         jac='3-point', method='trf')
         # print(temp_result)
 
-        # result = opt.least_squares(func_full, np.array([temp_result.x[0], temp_result.x[1], 0, 0, 0, 0]),
-        #                            bounds=[(-point[0] + window_center, -point[1] + window_center, -0.8, -0.8, -0.8, -0.8),
-        #                                                 (-point[0] + dim[0] - window_center - 1,
-        #                                                  -point[1] + dim[1] - window_center - 1, 1, 1, 1, 1)])
-        # print(result)
+        result = opt.least_squares(func_full, np.array([temp_result.x[0], temp_result.x[1], 0, 0, 0, 0]),
+                                   bounds=[(-point[0] + window_center, -point[1] + window_center, -0.8, -0.8, -0.8, -0.8),
+                                                        (-point[0] + dim[0] - window_center - 1,
+                                                         -point[1] + dim[1] - window_center - 1, 1, 1, 1, 1)])
+        print(result)
 
-        return (temp_result.x[0], temp_result.x[1], 0, 0, 0, 0)
+        return result.x
 
     def test_interpolation(self):
         img = np.array([[5, 7, 8, 7, 3, 5],

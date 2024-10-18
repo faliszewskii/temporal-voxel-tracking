@@ -7,14 +7,22 @@ class VoxelTracker:
         self.dvc = dvc.DigitalVolumeCorrelation()
 
     def track(self, frames, current_frame, start):
-        frame_count = len(frames)
+        frame_count = frames.shape[0]
         points = np.zeros((frame_count, 3))
 
         # Current frame
         points[current_frame] = np.array(start)
         for i in range(frame_count - current_frame - 1):
             t = (i + current_frame)
-            u, v, w = self.dvc.find_correlated_point(frames[t], frames[t+1], points[t])[0:3]  # Naive Euler
-            points[t + 1] = points[t] + np.array([u, v, w])
+            h = 1.0
+            k1 = self.dvc.find_correlated_point(frames, t, points[t])[0:3]
+            k2 = self.dvc.find_correlated_point(frames, t + h/2, points[t] + h*k1/2)[0:3]
+            k3 = self.dvc.find_correlated_point(frames, t + h/2, points[t] + h * k2 / 2)[0:3]
+            k4 = self.dvc.find_correlated_point(frames, t + h, points[t] + h * k3)[0:3]
+
+            points[t + 1] = points[t] + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+            # u, v, w = self.dvc.find_correlated_point(frames[t], frames[t+1], points[t])[0:3]  # Naive Euler
+            # points[t + 1] = points[t] + np.array([u, v, w])
 
         return points

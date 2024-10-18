@@ -545,14 +545,15 @@ class TemporalVoxelTrackingEngine:
 
         sequence_node = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLSequenceNode')
 
-        frames = []
+        arrays = []
         for t in range(frame_count):
             current_volume = sequence_node.GetNthDataNode(t)
             dims = current_volume.GetImageData().GetDimensions()
             current_array = numpy_support.vtk_to_numpy(current_volume.GetImageData().GetPointData().GetScalars())
             current_array = current_array.reshape((dims[0], dims[1], dims[2]), order='F')
-            frames.append(current_array)
+            arrays.append(current_array)
 
+        frames = np.stack(arrays, axis=0)
         points = self.vt.track(frames, current_frame, starting_coords)
 
         for i in range(len(points)):

@@ -41,58 +41,62 @@ class DigitalVolumeCorrelation():
 
         return nlsc
 
-    def cross_correlation_func_trans(self, variable, original_coords, interpolated_reference, interpolated_deformed, grid):
+    def cross_correlation_func_trans(self, variable, original_coords, time, interpolated, grid):
         x, y, z = original_coords
         u, v, w = variable
 
-        reference_window = (grid[0] + x, grid[1] + y, grid[2] + z)
-        deformed_window = (grid[0] + x + u, grid[1] + y + v, grid[2] + z + w)
+        reference_window = (time, grid[0] + x, grid[1] + y, grid[2] + z)
+        deformed_window = (time + 1, grid[0] + x + u, grid[1] + y + v, grid[2] + z + w)
 
-        window1 = interpolated_reference(reference_window, method="linear")  # quintic
-        window2 = interpolated_deformed(deformed_window, method="linear")  # quintic
+        window1 = interpolated(reference_window, method="linear")  # quintic
+        window2 = interpolated(deformed_window, method="linear")  # quintic
 
         return self.normalised_least_squares_criterion(window1, window2)
 
-    def cross_correlation_func_full(self, variable, original_coords, interpolatedReference, interpolatedDeformed, grid):
+    def cross_correlation_func_full(self, variable, original_coords, time, interpolated, grid):
         x, y, z = original_coords
         u, v, w, dux, duy, duz, dvx, dvy, dvz, dwx, dwy, dwz = variable
 
-        reference_window = (x + grid[0], y + grid[1], z + grid[2])
-        deformed_window = (x + grid[0] + u + dux * grid[0] + duy * grid[1] + duz * grid[2],
+        reference_window = (time, x + grid[0], y + grid[1], z + grid[2])
+        deformed_window = (time + 1,
+                           x + grid[0] + u + dux * grid[0] + duy * grid[1] + duz * grid[2],
                            y + grid[1] + v + dvx * grid[0] + dvy * grid[1] + dvz * grid[2],
                            z + grid[2] + w + dwx * grid[0] + dwy * grid[1] + dwz * grid[2])
 
-        window1 = interpolatedReference(reference_window, method="linear")  # quintic
-        window2 = interpolatedDeformed(deformed_window, method="linear")  # quintic
+        window1 = interpolated(reference_window, method="linear")  # quintic
+        window2 = interpolated(deformed_window, method="linear")  # quintic
 
         return self.normalised_least_squares_criterion(window1, window2)
 
-    def find_correlated_point(self, reference_volume, deformed_volume, point):
+    def find_correlated_point(self, volume, time, point):
         '''
         reference_volume, deformed_volume - 3D numpy array
         point - tuple (x, y, z)
         '''
 
-        dim = reference_volume.shape
+        dim = volume.shape[1:]
 
-        window_size = 15
+        window_size = 31
         window_center = window_size // 2 + 1
         window_side = window_size - window_center
 
-        range_x = np.array(range(0, deformed_volume.shape[0]))
-        range_y = np.array(range(0, deformed_volume.shape[1]))
-        range_z = np.array(range(0, deformed_volume.shape[2]))
-        interpolated_reference = RegularGridInterpolator((range_x, range_y, range_z), reference_volume)
-        interpolated_deformed = RegularGridInterpolator((range_x, range_y, range_z), deformed_volume)
+        range_t = np.array(range(0, volume.shape[0]))
+        range_x = np.array(range(0, volume.shape[1]))
+        range_y = np.array(range(0, volume.shape[2]))
+        range_z = np.array(range(0, volume.shape[3]))
+        interpolated = RegularGridInterpolator((range_t, range_x, range_y, range_z), volume, fill_value=0.0, bounds_error=False)
+        # interpolated_reference = RegularGridInterpolator((range_x, range_y, range_z), reference_volume)
+        # interpolated_deformed = RegularGridInterpolator((range_x, range_y, range_z), deformed_volume)
 
         grid = np.meshgrid(np.array(range(-window_side, window_side+1)), np.array(range(-window_side, window_side+1)), np.array(range(-window_side, window_side+1)), indexing='ij')
 
         def func_trans(variable):
-            return self.cross_correlation_func_trans(variable, point, interpolated_reference, interpolated_deformed, grid)
+            return self.cross_correlation_func_trans(variable, point, time, interpolated, grid)
 
         def func_full(variable):
-            return self.cross_correlation_func_full(variable, point, interpolated_reference, interpolated_deformed, grid)
+            return self.cross_correlation_func_full(variable, point, time, interpolated, grid)
 
+        print(time)
         print(point)
         print(dim)
         temp_result = opt.least_squares(func_trans, np.array([0, 0, 0]), bounds=[(-point[0], -point[1], -point[2]),
