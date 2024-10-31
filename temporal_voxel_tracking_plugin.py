@@ -130,6 +130,7 @@ class TemporalVoxelTrackingPlugin:
             (-32.516121, -5.252571, 24.970381)
         ]
         self.temporal_voxel_tracking_engine.test_points(pointsA)
+        self.temporal_voxel_tracking_engine.test_points(pointsB)
 
     def on_track_volume_action_triggered(self):
         todo()

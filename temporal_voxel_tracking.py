@@ -508,7 +508,7 @@ class TemporalVoxelTrackingEngine:
         current_volume = sequence_node.GetNthDataNode(0)
         dims = current_volume.GetImageData().GetDimensions()
 
-        points[:] = [[coord[i]/10 + dims[i]/2  for i in range(3)] for coord in points]
+        points[:] = [[coord[1] + dims[1]/2, coord[0] + dims[0]/2, coord[2] + dims[2]/2] for coord in points]
 
         # Draw the points. Maybe factor out into a function.
 
@@ -529,7 +529,7 @@ class TemporalVoxelTrackingEngine:
         display_node.SetOccludedOpacity(0.6)
 
         # Algorithm's deduction
-        self.dvc_track_point(points[0])
+        # self.dvc_track_point(points[0])
 
     def dvc_track_point(self, starting_coords):
         if getNodes(id_track_point, None):
