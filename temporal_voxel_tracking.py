@@ -508,7 +508,14 @@ class TemporalVoxelTrackingEngine:
         current_volume = sequence_node.GetNthDataNode(0)
         dims = current_volume.GetImageData().GetDimensions()
 
-        points[:] = [[coord[1] + dims[1]/2, coord[0] + dims[0]/2, coord[2] + dims[2]/2] for coord in points]
+        points[:] = [[coord[1]/0.695312 + dims[1]/2, coord[0]/0.695312 + dims[0]/2, coord[2]/0.699951 + dims[2]/2] for coord in points]
+
+        # points.append([dims[0], dims[1], dims[2]])
+        # points.append([0, 0, 0])
+        # points.append([dims[0]/2, dims[1]/2, dims[2]/2])
+        # points.append([dims[0] / 2,0, 0])
+        # points.append([0, dims[1] / 2, 0])
+        # points.append([0, 0, dims[2] / 2])
 
         # Draw the points. Maybe factor out into a function.
 
@@ -529,7 +536,35 @@ class TemporalVoxelTrackingEngine:
         display_node.SetOccludedOpacity(0.6)
 
         # Algorithm's deduction
-        # self.dvc_track_point(points[0])
+        result = self.dvc_track_point(points[0])
+        # result = [
+        #     (-30.142559, -10.356653, 31.015547) + (5, 5, 5),
+        #     (-29.794868, -10.037838, 30.927279) + (5, 5, 5),
+        #     (-31.184607, -3.484786, 24.132965) + (5, 5, 5),
+        #     (-31.884451, -7.143429, 27.065422) + (5, 5, 5),
+        #     (-30.934578, -2.063097, 22.980680) + (5, 5, 5),
+        #     (-31.506128, -2.228712, 22.798498) + (5, 5, 5),
+        #     (-32.443405, -3.587524, 23.492443) + (5, 5, 5),
+        #     (-31.370991, -9.353150, 29.382631) + (5, 5, 5),
+        #     (-31.766310, -6.360522, 26.419477) + (5, 5, 5),
+        #     (-32.516121, -5.252571, 24.970381) + (5, 5, 5)
+        # ]
+
+        for i in range(len(points)):
+            lineNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsLineNode", f"Line-{i}")
+            coords = self.changeBasis(points[i], ijk_to_ras_matrix)
+            lineNode.AddControlPoint(vtk.vtkVector3d(*coords))
+            coords = self.changeBasis(result[i], ijk_to_ras_matrix)
+            lineNode.AddControlPoint(vtk.vtkVector3d(*coords))
+
+            display_node = lineNode.GetDisplayNode()
+            display_node.SetOccludedVisibility(True)
+            display_node.SetOccludedOpacity(1.0)
+            display_node.SetLineThickness(2)
+            display_node.SetGlyphScale(0.1)
+            # markups_node.AddControlPoint(*coords)
+            # markups_node.SetNthControlPointLabel(i, f"{i}")
+
 
     def dvc_track_point(self, starting_coords):
         if getNodes(id_track_point, None):
@@ -564,6 +599,8 @@ class TemporalVoxelTrackingEngine:
         display_node = markups_node.GetDisplayNode()
         display_node.SetOccludedVisibility(True)
         display_node.SetOccludedOpacity(0.6)
+
+        return points
 
     def dvc_track_fiducial_node(self, fiducial_node):
         starting_coords = self.getPointCoords(fiducial_node)
