@@ -2,6 +2,7 @@ import numpy as np
 import time
 import slicer
 import math
+import csv
 import vtk
 from vtk.util import numpy_support
 from slicer.util import getNode, getNodes
@@ -510,13 +511,6 @@ class TemporalVoxelTrackingEngine:
 
         points[:] = [[coord[1]/0.695312 + dims[1]/2, coord[0]/0.695312 + dims[0]/2, coord[2]/0.699951 + dims[2]/2] for coord in points]
 
-        # points.append([dims[0], dims[1], dims[2]])
-        # points.append([0, 0, 0])
-        # points.append([dims[0]/2, dims[1]/2, dims[2]/2])
-        # points.append([dims[0] / 2,0, 0])
-        # points.append([0, dims[1] / 2, 0])
-        # points.append([0, 0, dims[2] / 2])
-
         # Draw the points. Maybe factor out into a function.
 
         markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
@@ -535,26 +529,31 @@ class TemporalVoxelTrackingEngine:
         display_node.SetOccludedVisibility(True)
         display_node.SetOccludedOpacity(0.6)
 
-        # Algorithm's deduction
-        result = self.dvc_track_point(points[0])
-        # result = [
-        #     (-30.142559, -10.356653, 31.015547) + (5, 5, 5),
-        #     (-29.794868, -10.037838, 30.927279) + (5, 5, 5),
-        #     (-31.184607, -3.484786, 24.132965) + (5, 5, 5),
-        #     (-31.884451, -7.143429, 27.065422) + (5, 5, 5),
-        #     (-30.934578, -2.063097, 22.980680) + (5, 5, 5),
-        #     (-31.506128, -2.228712, 22.798498) + (5, 5, 5),
-        #     (-32.443405, -3.587524, 23.492443) + (5, 5, 5),
-        #     (-31.370991, -9.353150, 29.382631) + (5, 5, 5),
-        #     (-31.766310, -6.360522, 26.419477) + (5, 5, 5),
-        #     (-32.516121, -5.252571, 24.970381) + (5, 5, 5)
-        # ]
+        config = []
+        # Load config
+        with open('C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\test\\test_cases.csv') as csv_file:
+            csvreader = csv.reader(csv_file, delimiter=',')
+            fields = next(csvreader)
+            for row in csvreader:
+                config.append(row)
 
-        for i in range(len(points)):
+        for i in range(len(config)):
+            # Algorithm's deduction
+            start = time.time()
+            result = self.dvc_track_point(points[0], int(config[i][0]), int(config[i][1]), int(config[i][2]), config[i][3])
+            end = time.time()
+            distances = np.linalg.norm(points - result, axis=1)
+            with open('C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\results\\test_results.csv', 'a') as csvfile:
+                csvwriter = csv.writer(csvfile, delimiter=',', lineterminator='\n')
+                row = [int(config[i][0]), int(config[i][1]), int(config[i][2]), config[i][3], end - start]
+                row.extend(distances)
+                csvwriter.writerow(row)
+
+        for i in range(len(points)-1):
             lineNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsLineNode", f"Line-{i}")
             coords = self.changeBasis(points[i], ijk_to_ras_matrix)
             lineNode.AddControlPoint(vtk.vtkVector3d(*coords))
-            coords = self.changeBasis(result[i], ijk_to_ras_matrix)
+            coords = self.changeBasis(points[i+1], ijk_to_ras_matrix)
             lineNode.AddControlPoint(vtk.vtkVector3d(*coords))
 
             display_node = lineNode.GetDisplayNode()
@@ -562,11 +561,26 @@ class TemporalVoxelTrackingEngine:
             display_node.SetOccludedOpacity(1.0)
             display_node.SetLineThickness(2)
             display_node.SetGlyphScale(0.1)
+            display_node.SetColor(1, 0, 0)
             # markups_node.AddControlPoint(*coords)
             # markups_node.SetNthControlPointLabel(i, f"{i}")
 
+        for i in range(len(result)-1):
+            lineNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsLineNode", f"")
+            coords = self.changeBasis(result[i], ijk_to_ras_matrix)
+            lineNode.AddControlPoint(vtk.vtkVector3d(*coords))
+            coords = self.changeBasis(result[i+1], ijk_to_ras_matrix)
+            lineNode.AddControlPoint(vtk.vtkVector3d(*coords))
 
-    def dvc_track_point(self, starting_coords):
+            display_node = lineNode.GetDisplayNode()
+            display_node.SetOccludedVisibility(True)
+            display_node.SetOccludedOpacity(1.0)
+            display_node.SetLineThickness(2)
+            display_node.SetGlyphScale(0.1)
+            display_node.SetColor(1, 1, 0)
+
+
+    def dvc_track_point(self, starting_coords, windowSizeConfig, onlyTranslationConfig, useKTConfig, interpolationConfig):
         if getNodes(id_track_point, None):
             slicer.mrmlScene.RemoveNode(getNode(id_track_point))
         [current_frame, frame_count] = self.getFrames()
@@ -589,7 +603,7 @@ class TemporalVoxelTrackingEngine:
             arrays.append(current_array)
 
         frames = np.stack(arrays, axis=0)
-        points = self.vt.track(frames, current_frame, starting_coords)
+        points = self.vt.track(frames, current_frame, starting_coords, windowSizeConfig, onlyTranslationConfig, useKTConfig, interpolationConfig)
 
         for i in range(len(points)):
             coords = self.changeBasis(points[i], ijk_to_ras_matrix)
@@ -607,4 +621,4 @@ class TemporalVoxelTrackingEngine:
         if not starting_coords:
             return
         slicer.mrmlScene.RemoveNode(fiducial_node)
-        self.dvc_track_point(starting_coords)
+        self.dvc_track_point(starting_coords, 31, False, True, 'linear')

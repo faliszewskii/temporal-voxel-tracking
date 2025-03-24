@@ -133,8 +133,8 @@ class TemporalVoxelTrackingPlugin:
         #     (-41.369629, 89.200050, -0.142498),
         #     (-59.968548, 51.035389, -72.672943)
         # ]
-        self.temporal_voxel_tracking_engine.test_points(pointsA)
-        #self.temporal_voxel_tracking_engine.test_points(pointsB)
+        # self.temporal_voxel_tracking_engine.test_points(pointsA)
+        self.temporal_voxel_tracking_engine.test_points(pointsB)
         # self.temporal_voxel_tracking_engine.test_points(pointsC)
 
     def on_track_volume_action_triggered(self):

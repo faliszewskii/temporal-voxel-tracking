@@ -4,7 +4,7 @@ from scipy.interpolate import RegularGridInterpolator
 import scipy.optimize as opt
 
 
-class DigitalVolumeCorrelation():
+class DigitalVolumeCorrelation:
 
     def __init__(self):
         pass
@@ -41,19 +41,19 @@ class DigitalVolumeCorrelation():
 
         return nlsc
 
-    def cross_correlation_func_trans(self, variable, original_coords, time, interpolated, grid):
+    def cross_correlation_func_trans(self, variable, original_coords, time, interpolated, grid, interpolationConfig):
         x, y, z = original_coords
         u, v, w = variable
 
         reference_window = (time, grid[0] + x, grid[1] + y, grid[2] + z)
         deformed_window = (time + 1, grid[0] + x + u, grid[1] + y + v, grid[2] + z + w)
 
-        window1 = interpolated(reference_window, method="linear")  # quintic
-        window2 = interpolated(deformed_window, method="linear")  # quintic
+        window1 = interpolated(reference_window, method=interpolationConfig)  # quintic
+        window2 = interpolated(deformed_window, method=interpolationConfig)  # quintic
 
         return self.normalised_least_squares_criterion(window1, window2)
 
-    def cross_correlation_func_full(self, variable, original_coords, time, interpolated, grid):
+    def cross_correlation_func_full(self, variable, original_coords, time, interpolated, grid, interpolationConfig):
         x, y, z = original_coords
         u, v, w, dux, duy, duz, dvx, dvy, dvz, dwx, dwy, dwz = variable
 
@@ -63,12 +63,12 @@ class DigitalVolumeCorrelation():
                            y + grid[1] + v + dvx * grid[0] + dvy * grid[1] + dvz * grid[2],
                            z + grid[2] + w + dwx * grid[0] + dwy * grid[1] + dwz * grid[2])
 
-        window1 = interpolated(reference_window, method="linear")  # quintic
-        window2 = interpolated(deformed_window, method="linear")  # quintic
+        window1 = interpolated(reference_window, method=interpolationConfig)  # quintic
+        window2 = interpolated(deformed_window, method=interpolationConfig)  # quintic
 
         return self.normalised_least_squares_criterion(window1, window2)
 
-    def find_correlated_point(self, volume, time, point):
+    def find_correlated_point(self, volume, time, point, windowSizeConfig, onlyTranslationConfig, interpolationConfig):
         '''
         reference_volume, deformed_volume - 3D numpy array
         point - tuple (x, y, z)
@@ -76,7 +76,7 @@ class DigitalVolumeCorrelation():
 
         dim = volume.shape[1:]
 
-        window_size = 31
+        window_size = windowSizeConfig
         window_center = window_size // 2 + 1
         window_side = window_size - window_center
 
@@ -91,19 +91,21 @@ class DigitalVolumeCorrelation():
         grid = np.meshgrid(np.array(range(-window_side, window_side+1)), np.array(range(-window_side, window_side+1)), np.array(range(-window_side, window_side+1)), indexing='ij')
 
         def func_trans(variable):
-            return self.cross_correlation_func_trans(variable, point, time, interpolated, grid)
+            return self.cross_correlation_func_trans(variable, point, time, interpolated, grid, interpolationConfig)
 
         def func_full(variable):
-            return self.cross_correlation_func_full(variable, point, time, interpolated, grid)
+            return self.cross_correlation_func_full(variable, point, time, interpolated, grid, interpolationConfig)
 
-        print(time)
-        print(point)
-        print(dim)
+        # print(time)
+        # print(point)
+        # print(dim)
         temp_result = opt.least_squares(func_trans, np.array([0, 0, 0]), bounds=[(-point[0], -point[1], -point[2]),
                                                         (-point[0] + dim[0] - 1,
                                                          -point[1] + dim[1] - 1,
                                                          -point[2] + dim[2] - 1)])
 
+        if onlyTranslationConfig:
+            return temp_result.x
         result = opt.least_squares(func_full, np.array([temp_result.x[0], temp_result.x[1], temp_result.x[2],
                                                         0, 0, 0, 0, 0, 0, 0, 0, 0]),
                                    bounds=[(-point[0] + window_center, -point[1] + window_center,
@@ -116,5 +118,5 @@ class DigitalVolumeCorrelation():
                                            ]
                                    )
 
-        print(result)
+        # print(result)
         return result.x
