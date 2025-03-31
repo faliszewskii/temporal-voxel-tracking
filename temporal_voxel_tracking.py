@@ -503,15 +503,14 @@ class TemporalVoxelTrackingEngine:
             # fiducial_node_gt.SetNthControlPointSelected(i, i == current_frame)
 
     def test_points(self, points):
-        # points[:] = [[x / 10 for x in coord] for coord in points]
 
         sequence_node = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLSequenceNode')
         current_volume = sequence_node.GetNthDataNode(0)
         dims = current_volume.GetImageData().GetDimensions()
 
+        # Correction of the points from Vea.
         points[:] = [[coord[1]/0.695312 + dims[1]/2, coord[0]/0.695312 + dims[0]/2, coord[2]/0.699951 + dims[2]/2] for coord in points]
 
-        # Draw the points. Maybe factor out into a function.
 
         markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
         markups_node.SetName(id_ground_truth)
