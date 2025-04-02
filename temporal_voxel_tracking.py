@@ -530,7 +530,8 @@ class TemporalVoxelTrackingEngine:
 
         config = []
         # Load config
-        with open('C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\test\\test_cases.csv') as csv_file:
+        # with open('C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\test\\test_cases.csv') as csv_file:
+        with open('/home/faliszewskii/Repositories/temporal-voxel-tracking/test/test_cases.csv') as csv_file:
             csvreader = csv.reader(csv_file, delimiter=',')
             fields = next(csvreader)
             for row in csvreader:
@@ -542,7 +543,8 @@ class TemporalVoxelTrackingEngine:
             result = self.dvc_track_point(points[0], int(config[i][0]), int(config[i][1]), int(config[i][2]), config[i][3])
             end = time.time()
             distances = np.linalg.norm(points - result, axis=1)
-            with open('C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\results\\test_results.csv', 'a') as csvfile:
+            # with open('C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\results\\test_results.csv', 'a') as csvfile:
+            with open('/home/faliszewskii/Repositories/temporal-voxel-tracking/results/test_results.csv', 'a') as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=',', lineterminator='\n')
                 row = [int(config[i][0]), int(config[i][1]), int(config[i][2]), config[i][3], end - start]
                 row.extend(distances)
