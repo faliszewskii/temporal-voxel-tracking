@@ -30,10 +30,11 @@ class FrameGenerator:
         for nx in range(dim[0]):
             for ny in range(dim[1]):
                 for nz in range(dim[2]):
-                    transformedCoordinates[nx, ny, nz, :] = transform(np.array([nx, ny, nz]), 1)
+                    transformedCoordinates[nx, ny, nz, :] = transform(np.array([nx, ny, nz]), np.array([dim[0], dim[1], dim[2]]), t)
 
         transformedFrame = np.empty(dim)
         for nx in range(dim[0]-1):
+            print(f"[{nx}, :, :]")
             for ny in range(dim[1]-1):
                 for nz in range(dim[2]-1):
                     # For each tetrahedron get its bounding box and try to assign values to the integer numbered cells
@@ -50,11 +51,34 @@ class FrameGenerator:
                             startFrame[nx + tetra[3][0], ny + tetra[3][1], nz + tetra[3][2]]
                         ]
                         (minX, maxX, minY, maxY, minZ, maxZ) = self.getBoundingBox(p0, p1, p2, p3)
-                        for bx in range(minX, maxX + 1):
-                            for by in range(minY, maxY + 1):
-                                for bz in range(minZ, maxZ + 1):
-                                    w = self.barycentricInterpolation([p0, p1, p2, p3], weights, np.array([bx, by, bz]))
-                                    transformedFrame[bx, by, bz] = w
+                        vab = p1 - p0
+                        vac = p2 - p0
+                        vad = p3 - p0
+                        vbc = p2 - p1
+                        vbd = p3 - p1
+                        bd_bc = np.cross(vbd, vbc)
+                        ac_ad = np.cross(vac, vad)
+                        ad_ab = np.cross(vad, vab)
+                        ab_ac = np.cross(vab, vac)
+                        v6 = 1 / np.dot(vab, ac_ad)
+                        for bx in range(max(0, minX), min(maxX + 1, dim[0])):
+                            for by in range(max(0, minY), min(maxY + 1, dim[1])):
+                                for bz in range(max(0, minZ), min(maxZ + 1, dim[2])):
+                                    p = np.array([bx, by, bz])
+                                    vap = p - p0
+                                    vbp = p - p1
+
+                                    va6 = np.dot(vbp, bd_bc) * v6
+                                    vb6 = np.dot(vap, ac_ad) * v6
+                                    vc6 = np.dot(vap, ad_ab) * v6
+                                    vd6 = np.dot(vap, ab_ac) * v6
+
+                                    outside = va6 < 0 or vb6 < 0 or vc6 < 0 or vd6 < 0
+
+                                    w = va6 * weights[0] + vb6 * weights[1] + vc6 * weights[2] + vd6 * weights[3]
+
+                                    if not outside:
+                                        transformedFrame[bx, by, bz] = w
         return transformedFrame
 
     def getBoundingBox(self, p0, p1, p2, p3):
@@ -67,29 +91,18 @@ class FrameGenerator:
 
         return minX, maxX, minY, maxY, minZ, maxZ
 
-    def barycentricInterpolation(self, points, weights, p):
-        a = points[0]
-        b = points[1]
-        c = points[2]
-        d = points[3]
+    # def barycentricInterpolation(self, points, weights, p, vab, vac, vad, vbc, vbd, v6):
+    #     vap = p - points[0]
+    #     vbp = p - points[1]
+    #
+    #     va6 = np.dot( )self.sctp(vbp, vbd, vbc) * v6
+    #     vb6 = self.sctp(vap, vac, vad) * v6
+    #     vc6 = self.sctp(vap, vad, vab) * v6
+    #     vd6 = self.sctp(vap, vab, vac) * v6
+    #
+    #     outside = va6 < 0 or vb6 < 0 or vc6 < 0 or vd6 < 0
+    #
+    #     return va6 * weights[0] + vb6 * weights[1] + vc6 * weights[2] + vd6 * weights[3], outside
 
-        vap = p - a
-        vbp = p - b
-
-        vab = b - a
-        vac = c - a
-        vad = d - a
-
-        vbc = c - b
-        vbd = d - b
-
-        v6 = 1 / self.sctp(vab, vac, vad)
-        va6 = self.sctp(vbp, vbd, vbc) * v6
-        vb6 = self.sctp(vap, vac, vad) * v6
-        vc6 = self.sctp(vap, vad, vab) * v6
-        vd6 = self.sctp(vap, vab, vac) * v6
-
-        return va6 * weights[0] + vb6 * weights[1] + vc6 * weights[2] + vd6 * weights[3]
-
-    def sctp(self, a, b, c):
-        return np.dot(a, np.cross(b, c))
+    # def sctp(self, a, b, c):
+    #     return np.dot(a, np.cross(b, c))
