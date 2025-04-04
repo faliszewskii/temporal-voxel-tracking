@@ -622,4 +622,4 @@ class TemporalVoxelTrackingEngine:
         if not starting_coords:
             return
         slicer.mrmlScene.RemoveNode(fiducial_node)
-        self.dvc_track_point(starting_coords, 31, False, True, 'linear')
+        self.dvc_track_point(starting_coords, 31, False, False, 'linear')
