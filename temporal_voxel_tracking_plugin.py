@@ -7,8 +7,9 @@ import slicer
 from slicer.util import getNode, getNodes
 from slicer.ScriptedLoadableModule import *
 import numpy as np
-from vtk.util import numpy_support
-import vtk
+
+import slicer_helpers as sh
+
 
 class TemporalVoxelTrackingPlugin:
     def __init__(self, parent=None):
@@ -62,7 +63,7 @@ class TemporalVoxelTrackingPlugin:
         self.add_action(generate_menu, "Generate Random Cube", lambda _: self.generate(self.data_generator.generate_random_cube))
         self.add_action(generate_menu, "Generate Pulsating Cylinder", lambda _: self.generate(self.data_generator.generate_pulsating_cylinder))
         generate_menu.addSeparator()
-        self.add_action(generate_menu, "Generate Translated Frames", lambda _: self.on_generate_translation())
+        self.add_action(generate_menu, "Generate Rotating Frames", lambda _: self.on_generate_rotation())
 
         self.add_action(dvc_menu, "Track Point", self.on_dvc_track_point_action_triggered)
         self.add_action(dvc_menu, "Test tracking - point", self.on_dvc_test_point_action_triggered)
@@ -148,48 +149,19 @@ class TemporalVoxelTrackingPlugin:
     def on_track_mesh_action_triggered(self):
         todo()
 
-    def on_generate_translation(self):
-        def translate(x, t):
-            return x + np.array([t, 0, 0])
+    def on_generate_rotation(self):
+        def rotate(x, dim, t):
+            rot = np.array([
+                [1, 0, 0],
+                [0, np.cos(0.2*t), -np.sin(0.2*t)],
+                [0, np.sin(0.2*t), np.cos(0.2*t)]
+            ])
+            return rot @ (x-dim/2) + dim/2
 
-        startFrame = self.getFirstFrameFromData()
-        frames = self.frame_generator.generateFrames(startFrame, 10, translate)
-        self.createSequence(frames)
+        startFrame, ijkToRas = sh.getFirstFrameFromData()
+        frames = self.frame_generator.generateFrames(startFrame, 10, rotate)
+        sh.createSequence(frames, ijkToRas)
 
-    def getFirstFrameFromData(self):
-        sequence_node = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLSequenceNode')
-        current_volume = sequence_node.GetNthDataNode(0)
-        dims = current_volume.GetImageData().GetDimensions()
-        current_array = numpy_support.vtk_to_numpy(current_volume.GetImageData().GetPointData().GetScalars())
-        current_array = current_array.reshape((dims[0], dims[1], dims[2]), order='F')
-        return current_array
-
-    def createSequence(self, frames):
-        sequence_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSequenceNode")
-        sequence_node.SetName("Generated Data Sequence")
-        sequence_node.SetIndexName("frames")
-        sequence_node.SetIndexUnit("frame")
-
-        seq_browser = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSequenceBrowserNode")
-        seq_browser.SetName("Generated Data Browser")
-        seq_browser.SetAndObserveMasterSequenceNodeID(sequence_node.GetID())
-        seq_browser.SetSaveChanges(sequence_node, True)
-
-        for i in range(len(frames)):
-            data_vtk = numpy_support.numpy_to_vtk(num_array=frames[i].ravel(order='F'), deep=True, array_type=vtk.VTK_FLOAT)
-
-            image_data = vtk.vtkImageData()
-            image_data.SetDimensions(frames[i].shape)
-            image_data.AllocateScalars(vtk.VTK_FLOAT, 1)
-            image_data.GetPointData().SetScalars(data_vtk)
-
-            volume_node = slicer.vtkMRMLScalarVolumeNode()
-            volume_node.SetOrigin(0, 0, 0)
-            volume_node.SetSpacing(1, 1, 1)
-            volume_node.SetIJKToRASDirectionMatrix(vtk.vtkMatrix4x4())
-            volume_node.SetAndObserveImageData(image_data)
-
-            sequence_node.SetDataNodeAtValue(volume_node, str(i))
 
 # ------------------- MAIN -------------------
 
