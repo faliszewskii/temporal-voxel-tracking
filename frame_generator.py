@@ -14,23 +14,31 @@ class FrameGenerator:
             [[1, 1, 1], [0, 1, 0], [1, 0, 0], [0, 0, 1]]
         ]
 
-    def generateFrames(self, startFrame, totalFrameCount, transform):
+    def generateFrames(self, startFrame, totalFrameCount, transform, isCyclical):
         frames = [startFrame]
 
-        for t in range(1, totalFrameCount):
-            frame = self.generateFrame(startFrame, transform, t)
+        count = totalFrameCount
+        if isCyclical:
+            count -= 1
+
+        for t in range(1, count):
+            frame = self.generateFrame(startFrame, transform, t, totalFrameCount)
             frames.append(frame)
+
+        if isCyclical:
+            frames.append(startFrame)
 
         return frames
 
-    def generateFrame(self, startFrame, transform, t):
+    def generateFrame(self, startFrame, transform, t, totalFrameCount):
         dim = startFrame.shape
+        print(f"Frame {t}")
 
         transformedCoordinates = np.empty([dim[0], dim[1], dim[2], 3])
         for nx in range(dim[0]):
             for ny in range(dim[1]):
                 for nz in range(dim[2]):
-                    transformedCoordinates[nx, ny, nz, :] = transform(np.array([nx, ny, nz]), np.array([dim[0], dim[1], dim[2]]), t)
+                    transformedCoordinates[nx, ny, nz, :] = transform(np.array([nx, ny, nz]), t, np.array([dim[0], dim[1], dim[2]]), totalFrameCount)
 
         transformedFrame = np.empty(dim)
         for nx in range(dim[0]-1):
@@ -50,7 +58,12 @@ class FrameGenerator:
                             startFrame[nx + tetra[2][0], ny + tetra[2][1], nz + tetra[2][2]],
                             startFrame[nx + tetra[3][0], ny + tetra[3][1], nz + tetra[3][2]]
                         ]
+
+                        if weights[0] == weights[1] == weights[2] == weights[3] == 0:
+                            continue
+
                         (minX, maxX, minY, maxY, minZ, maxZ) = self.getBoundingBox(p0, p1, p2, p3)
+
                         vab = p1 - p0
                         vac = p2 - p0
                         vad = p3 - p0
@@ -68,14 +81,14 @@ class FrameGenerator:
                                     vap = p - p0
                                     vbp = p - p1
 
-                                    va6 = np.dot(vbp, bd_bc) * v6
-                                    vb6 = np.dot(vap, ac_ad) * v6
-                                    vc6 = np.dot(vap, ad_ab) * v6
-                                    vd6 = np.dot(vap, ab_ac) * v6
+                                    va = np.dot(vbp, bd_bc) * v6
+                                    vb = np.dot(vap, ac_ad) * v6
+                                    vc = np.dot(vap, ad_ab) * v6
+                                    vd = np.dot(vap, ab_ac) * v6
 
-                                    outside = va6 < 0 or vb6 < 0 or vc6 < 0 or vd6 < 0
+                                    outside = va < 0 or vb < 0 or vc < 0 or vd < 0
 
-                                    w = va6 * weights[0] + vb6 * weights[1] + vc6 * weights[2] + vd6 * weights[3]
+                                    w = va * weights[0] + vb * weights[1] + vc * weights[2] + vd * weights[3]
 
                                     if not outside:
                                         transformedFrame[bx, by, bz] = w

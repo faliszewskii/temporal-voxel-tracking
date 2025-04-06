@@ -424,7 +424,7 @@ class TemporalVoxelTrackingEngine:
 
         return points
 
-    def getFrames(self):
+    def getFramesLegacy(self):
         sequence_browser_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceBrowserNode')
         if not sequence_browser_nodes:
             print("No sequence browser nodes found")
@@ -441,7 +441,7 @@ class TemporalVoxelTrackingEngine:
 
         return current_frame, frame_count
 
-    def getPointCoords(self, fiducial_node):
+    def getPointCoordsLegacy(self, fiducial_node):
         ras_to_ijk_matrix = self.getRAS2IJKMatrix()
         if not ras_to_ijk_matrix:
             print("No volume detected to track")
@@ -484,18 +484,18 @@ class TemporalVoxelTrackingEngine:
         display_node.SetOccludedOpacity(0.6)
 
     def start_tracking_point(self, fiducial_node, tracker):
-        starting_coords = self.getPointCoords(fiducial_node)
+        starting_coords = self.getPointCoordsLegacy(fiducial_node)
         if not starting_coords:
             return
         slicer.mrmlScene.RemoveNode(fiducial_node)
         if getNodes(id_track_point, None):
             slicer.mrmlScene.RemoveNode(getNode(id_track_point))
-        [current_frame, frame_count] = self.getFrames()
+        [current_frame, frame_count] = self.getFramesLegacy()
         points = self.generateTrack(starting_coords, current_frame, frame_count, self.optical_flow_sequence)
         self.compare_to_truth(points, tracker, starting_coords, current_frame)
 
     def track_point(self):
-        [current_frame, frame_count] = self.getFrames()
+        [current_frame, frame_count] = self.getFramesLegacy()
         fiducial_node = getNode(id_track_point)
         # fiducial_node_gt = getNode("Ground Truth")
         for i in range(frame_count):
@@ -540,13 +540,13 @@ class TemporalVoxelTrackingEngine:
         for i in range(len(config)):
             # Algorithm's deduction
             start = time.time()
-            result = self.dvc_track_point(points[0], int(config[i][0]), int(config[i][1]), int(config[i][2]), config[i][3])
+            result = self.dvc_track_point_legacy(points[0], int(config[i][0]), int(config[i][1]), config[i][2])
             end = time.time()
             distances = np.linalg.norm(points - result, axis=1)
             # with open('C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\results\\test_results.csv', 'a') as csvfile:
             with open('/home/faliszewskii/Repositories/temporal-voxel-tracking/results/test_results.csv', 'a') as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=',', lineterminator='\n')
-                row = [int(config[i][0]), int(config[i][1]), int(config[i][2]), config[i][3], end - start]
+                row = [int(config[i][0]), int(config[i][1]), config[i][2], end - start]
                 row.extend(distances)
                 csvwriter.writerow(row)
 
@@ -581,10 +581,10 @@ class TemporalVoxelTrackingEngine:
             display_node.SetColor(1, 1, 0)
 
 
-    def dvc_track_point(self, starting_coords, windowSizeConfig, onlyTranslationConfig, useKTConfig, interpolationConfig):
+    def dvc_track_point_legacy(self, starting_coords, windowSizeConfig, onlyTranslationConfig, interpolationConfig):
         if getNodes(id_track_point, None):
             slicer.mrmlScene.RemoveNode(getNode(id_track_point))
-        [current_frame, frame_count] = self.getFrames()
+        [current_frame, frame_count] = self.getFramesLegacy()
 
         ijk_to_ras_matrix = self.getIJK2RASMatrix()
         markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
@@ -604,7 +604,7 @@ class TemporalVoxelTrackingEngine:
             arrays.append(current_array)
 
         frames = np.stack(arrays, axis=0)
-        points = self.vt.track(frames, current_frame, starting_coords, windowSizeConfig, onlyTranslationConfig, useKTConfig, interpolationConfig)
+        points = self.vt.track(frames, current_frame, starting_coords, windowSizeConfig, onlyTranslationConfig, interpolationConfig)
 
         for i in range(len(points)):
             coords = self.changeBasis(points[i], ijk_to_ras_matrix)
@@ -618,8 +618,23 @@ class TemporalVoxelTrackingEngine:
         return points
 
     def dvc_track_fiducial_node(self, fiducial_node):
-        starting_coords = self.getPointCoords(fiducial_node)
+        starting_coords = self.getPointCoordsLegacy(fiducial_node)
         if not starting_coords:
             return
         slicer.mrmlScene.RemoveNode(fiducial_node)
-        self.dvc_track_point(starting_coords, 31, False, False, 'linear')
+        self.dvc_track_point_legacy(starting_coords, 31, False, 'linear')
+
+    def dvcTrackPointWithGT(self, startPoint, gtFunc, frames, currentFrame, config):
+        shape = frames[currentFrame].shape
+        dim = np.array([shape[0], shape[1], shape[2]])
+        def transform(x, t): return gtFunc(x, t, dim, len(frames))
+
+        start = time.time()
+        points = self.vt.track(frames, currentFrame, startPoint, config[0], config[1], config[2])
+        end = time.time()
+
+        pointsGT = [startPoint]
+        for i in range(currentFrame+1, len(frames)):
+            pointsGT.append(transform(startPoint, i))
+
+        return points, pointsGT, end - start

@@ -6,7 +6,7 @@ class VoxelTracker:
     def __init__(self):
         self.dvc = dvc.DigitalVolumeCorrelation()
 
-    def track(self, frames, current_frame, start, windowSizeConfig, onlyTranslationConfig, useKTConfig, interpolationConfig):
+    def track(self, frames, current_frame, start, windowSizeConfig, onlyTranslationConfig, interpolationConfig):
         frame_count = frames.shape[0]
         points = np.zeros((frame_count, 3))
 
