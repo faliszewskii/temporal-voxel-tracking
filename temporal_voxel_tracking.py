@@ -12,7 +12,7 @@ import voxel_tracker as vt
 # Identifiers
 id_start_tracking_point = 'start_tracking_point'
 id_ground_truth = 'ground_truth'
-id_track_point = 'track_point'
+id_track_point = 'Algorithm Deduction'
 id_start_tracking_volume = 'start_tracking_volume'
 
 

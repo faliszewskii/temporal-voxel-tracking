@@ -27,7 +27,7 @@ class TemporalVoxelTrackingPlugin:
         self.perlin_noise: RegularGridInterpolator = None
 
     def update_frame(self):
-        id_track_point = 'track_point'
+        id_track_point = 'Algorithm Deduction'
         if getNodes(id_track_point, None) and getNode(id_track_point).IsA('vtkMRMLMarkupsFiducialNode'):
             self.temporal_voxel_tracking_engine.track_point()
 
