@@ -101,10 +101,15 @@ def changeBasis(coords, basis_matrix):
     return destination[:3]
 
 
-def getPointCoords(fiducial_node, ras2ijk):
-    coords = [0.0, 0.0, 0.0]
-    fiducial_node.GetNthControlPointPosition(0, coords)
-    return changeBasis(coords, ras2ijk)
+def getPointsCoords(fiducial_node, ras2ijk):
+    points = []
+    num_points = fiducial_node.GetNumberOfControlPoints()
+    for i in range(num_points):
+        coords = [0, 0, 0]
+        fiducial_node.GetNthControlPointPosition(i, coords)
+        point = changeBasis(coords, ras2ijk)
+        points.append(point)
+    return points
 
 
 def getSequenceDataFromFirstAvailable():
@@ -157,3 +162,12 @@ def createMarkers(points, ijk2ras, name, prefix):
     display_node = markups_node.GetDisplayNode()
     display_node.SetOccludedVisibility(True)
     display_node.SetOccludedOpacity(0.6)
+
+    return markups_node
+
+def getNodesWithName(name):
+    matching_nodes = []
+    for node in slicer.mrmlScene.GetNodes():
+            if node.GetName() == name:
+                matching_nodes.append(node)
+    return matching_nodes

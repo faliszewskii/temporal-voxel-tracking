@@ -7,6 +7,7 @@ import vtk
 from vtk.util import numpy_support
 from slicer.util import getNode, getNodes
 import optical_flow as of
+import slicer_helpers as sh
 import voxel_tracker as vt
 
 # Identifiers
@@ -496,11 +497,12 @@ class TemporalVoxelTrackingEngine:
 
     def track_point(self):
         [current_frame, frame_count] = self.getFramesLegacy()
-        fiducial_node = getNode(id_track_point)
-        # fiducial_node_gt = getNode("Ground Truth")
-        for i in range(frame_count):
-            fiducial_node.SetNthControlPointSelected(i, i == current_frame)
-            # fiducial_node_gt.SetNthControlPointSelected(i, i == current_frame)
+        nodes = sh.getNodesWithName(id_track_point)
+        for node in nodes:
+            num = node.GetNumberOfControlPoints()
+            for point in range(num):
+                node.SetNthControlPointSelected(point, (point % frame_count) == current_frame)
+
 
     def test_points(self, points):
 
@@ -638,3 +640,9 @@ class TemporalVoxelTrackingEngine:
             pointsGT.append(transform(startPoint, i))
 
         return points, pointsGT, end - start
+
+    def dvcTrackPoint(self, startPoint, frames, currentFrame, config):
+        start = time.time()
+        points = self.vt.track(frames, currentFrame, startPoint, config[0], config[1], config[2])
+        end = time.time()
+        return points, end - start

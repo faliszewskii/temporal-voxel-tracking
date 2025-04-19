@@ -82,7 +82,7 @@ class TemporalVoxelTrackingPlugin:
         self.add_action(noise_menu, "Generate Perlin Noise For Current Volume", self.on_generate_perlin_noise)
         self.add_action(noise_menu, "Load Perlin Noise", self.on_load_perlin_noise)
 
-        self.add_action(dvc_menu, "Track Point", self.on_dvc_track_point_action_triggered)
+        self.add_action(dvc_menu, "Track Multiple Points", self.on_dvc_track_multiple_points_action_triggered)
         self.add_action(dvc_menu, "Test tracking - points B", self.on_dvc_test_point_action_triggered)
         self.add_action(dvc_menu, "Test tracking - Pulse", self.on_dvc_test_pulse_action_triggered)
         self.add_action(dvc_menu, "Test tracking - Noise Pulse", self.on_dvc_test_noise_pulse_action_triggered)
@@ -120,15 +120,28 @@ class TemporalVoxelTrackingPlugin:
         else:
             print("no node selected")
 
-    def on_dvc_track_point_action_triggered(self):
-        active_place_node_id = slicer.util.getNode('vtkMRMLSelectionNodeSingleton').GetActivePlaceNodeID()
-        if not active_place_node_id:
-            return None
-        selected_node = slicer.mrmlScene.GetNodeByID(active_place_node_id)
-        if selected_node and selected_node.IsA('vtkMRMLMarkupsFiducialNode'):
-            self.temporal_voxel_tracking_engine.dvc_track_fiducial_node(selected_node)
-        else:
-            print("no node selected")
+    def on_dvc_track_multiple_points_action_triggered(self):
+        marker = sh.getSelectedMarker()
+        if not marker:
+            return
+        ras2ijk = sh.getRAS2IJKMatrixForFirstAvailableVolume()
+        points = sh.getPointsCoords(marker, ras2ijk)
+        slicer.mrmlScene.RemoveNode(marker)
+        frames, currentFrame = sh.getFramesFromFirstAvailable()
+        config = (31, False, 'linear')
+
+        results = np.zeros((len(frames)*len(points), 3))
+        for i in range(len(points)):
+            point = points[i]
+            result, time = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, currentFrame, config)
+            for j in range(len(result)):
+                results[i*len(result) + j] = result[j]
+            print(f"Done: {i} / {len(points)}")
+
+        ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
+        node = sh.createMarkers(results, ijk2ras, 'Algorithm Deduction', '')
+        node.GetDisplayNode().SetTextScale(0)
+
 
     def on_dvc_test_point_action_triggered(self):
         pointsA = [
