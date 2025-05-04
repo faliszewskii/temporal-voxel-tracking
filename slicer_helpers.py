@@ -22,10 +22,13 @@ def getFirstFrameFromData():
     ijk_to_ras_matrix = vtk.vtkMatrix4x4()
     current_volume.GetIJKToRASMatrix(ijk_to_ras_matrix)
 
-    return current_array, ijk_to_ras_matrix
+    return current_array.astype(np.float32), ijk_to_ras_matrix
 
 
-def createSequence(frames, ijkToRas):
+def createSequence(frames, ijkToRas=None):
+    if ijkToRas is None:
+        ijkToRas = vtk.vtkMatrix4x4()
+
     sequence_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSequenceNode")
     sequence_node.SetName("Generated Data Sequence")
     sequence_node.SetIndexName("frames")
@@ -148,6 +151,8 @@ def getFramesFromFirstAvailable():
 
 
 def createMarkers(points, ijk2ras, name, prefix):
+    if ijk2ras is None:
+        ijk2ras = vtk.vtkMatrix4x4()
     markups_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
     markups_node.SetName(name)
     markups_node.GetDisplayNode().SetGlyphScale(1.5)
