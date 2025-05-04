@@ -111,4 +111,4 @@ class DigitalVolumeCorrelation:
         result = opt.least_squares(func_full, np.array([temp_result.x[0], temp_result.x[1], temp_result.x[2], 0, 0, 0, 0, 0, 0, 0, 0, 0]), bounds=bounds)
 
         # print(result)
-        return result.x
+        return result.x[0], result.x[1], result.x[2], result.cost
