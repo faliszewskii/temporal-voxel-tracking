@@ -7,6 +7,7 @@ from vtk.util import numpy_support
 from numpy import random
 
 from generated_data import GeneratedData
+from perlin_noise import PerlinNoise
 
 
 class DataGenerator:
@@ -14,7 +15,10 @@ class DataGenerator:
     def __init__(self):
         pass
 
-    def generate_data(self, frame_count, data_func, tracker):
+    def generate_sphere(self, resolution, radius):
+        return self.sphere_data(resolution, radius)
+
+    def generate_data_legacy(self, frame_count, data_func, tracker):
         sequence_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSequenceNode")
         sequence_node.SetName("Generated Data Sequence")
         sequence_node.SetIndexName("frames")
@@ -74,13 +78,51 @@ class DataGenerator:
 
         return cubeArray
 
+    @staticmethod
+    def sphere_data(dimensions, radius=None):
+        sphere_array = np.zeros(dimensions, dtype=np.float32)
+
+        center = np.array([dim / 2 for dim in dimensions])
+
+        if radius is None:
+            radius = (min(dimensions) / 2) / 2
+
+        x_range = np.arange(dimensions[0])
+        y_range = np.arange(dimensions[1])
+        z_range = np.arange(dimensions[2])
+        X, Y, Z = np.meshgrid(x_range, y_range, z_range, indexing='ij')
+
+        squared_dist = (X - center[0])**2 + (Y - center[1])**2 + (Z - center[2])**2
+        normalized_values = squared_dist / radius**2
+        inside_sphere = normalized_values <= 1
+        noise1 = PerlinNoise(octaves=40, seed=123)
+        noise2 = PerlinNoise(octaves=20, seed=123)
+        noise3 = PerlinNoise(octaves=10, seed=123)
+
+        def func(x, y, z):
+            vec = noise1([x, y, z]) + noise2([x, y, z]) + noise3([x, y, z])
+            vec /= 3
+            return vec
+
+        Xn = X / dimensions[0]
+        Yn = Y / dimensions[1]
+        Zn = Z / dimensions[2]
+        vec_noise = np.vectorize(func)
+        noise_vals = vec_noise(Xn, Yn, Zn)
+
+        noise_vals = (noise_vals + 1) / 2
+        sphere_array[inside_sphere] = noise_vals[inside_sphere]
+        # sphere_array[inside_sphere] = normalized_values[inside_sphere] * (1 + 0.3 * noise_vals[inside_sphere])
+
+        return sphere_array
+
     def generate_static_cube(self):
         print("Generating static cube...")
         frame_count = 10
         def f(x): return np.array([0.0, 0.0, 0.0])
         def tracker(p0, t_p0, t) :
             return p0
-        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
+        return self.generate_data_legacy(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
 
     def generate_slow_cube(self):
         print("Generating slow cube...")
@@ -88,7 +130,7 @@ class DataGenerator:
         def f(x): return x * np.array([0.0, 0.0, 1.0])
         def tracker(p0, t_p0, t) :
             return p0 + f(t - t_p0)
-        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
+        return self.generate_data_legacy(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
 
     def generate_faster_cube(self):
         print("Generating faster cube...")
@@ -96,7 +138,7 @@ class DataGenerator:
         def f(x): return x * np.array([2.0, 0.0, 0.0])
         def tracker(p0, t_p0, t) :
             return p0 + f(t - t_p0)
-        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
+        return self.generate_data_legacy(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
 
     def generate_random_cube(self):
         print("Generating random cube...")
@@ -104,7 +146,7 @@ class DataGenerator:
         current_pos = [0.0, 0.0, 0.0]
         def f(x): return 10 * np.array([random.random(), random.random(), random.random()]) + current_pos
         def tracker(p0, t_p0, t): return None
-        return self.generate_data(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
+        return self.generate_data_legacy(frame_count, lambda dimensions, i: self.linear_cube_data(dimensions, i, [f(x) for x in np.arange(frame_count)]), tracker)
 
     @staticmethod
     def cylinder_func(dim, frame, rFunc):
@@ -142,7 +184,7 @@ class DataGenerator:
         def tracker(p0, t_p0, t):
             c = np.array([center[0], center[1], p0[2]])
             return c + (p0 - c) * r_func(t) / r_func(t_p0)
-        return self.generate_data(frame_count, cylinder, tracker)
+        return self.generate_data_legacy(frame_count, cylinder, tracker)
 
     # @staticmethod
     # def bezier_func(dim, frame, rFunc):
