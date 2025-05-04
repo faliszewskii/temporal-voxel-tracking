@@ -60,6 +60,9 @@ class TemporalVoxelTrackingPlugin:
         dvc_menu = main_menu_bar.addMenu("DVC")
         dvc_menu.setObjectName("DVCMenu")
 
+        points_menu = main_menu_bar.addMenu("Points")
+        points_menu.setObjectName("PointsMenu")
+
         self.add_action(optical_flow_menu, "Calculate optical flow for selected", self.on_calculate_optical_flow_action_triggered)
         optical_flow_menu.addSeparator()
         self.add_action(optical_flow_menu, "Show Optical Flow Magnitudes", self.on_show_magnitudes_action_triggered)
@@ -86,6 +89,10 @@ class TemporalVoxelTrackingPlugin:
         self.add_action(dvc_menu, "Test tracking - points B", self.on_dvc_test_point_action_triggered)
         self.add_action(dvc_menu, "Test tracking - Pulse", self.on_dvc_test_pulse_action_triggered)
         self.add_action(dvc_menu, "Test tracking - Noise Pulse", self.on_dvc_test_noise_pulse_action_triggered)
+        self.add_action(dvc_menu, "Perform resolution tests", self.on_dvc_test_resolution)
+
+        self.add_action(points_menu, "Export Selected Markers", self.on_import_selected_markers_action_triggered)
+
 
     def generate(self, func):
         self.current_data = func()
@@ -181,9 +188,9 @@ class TemporalVoxelTrackingPlugin:
     def on_track_mesh_action_triggered(self):
         todo()
 
-    def generate_transform(self, transform, frameCount, isCyclical):
+    def generate_transform(self, transformType, frameCount, isCyclical):
        startFrame, ijkToRas = sh.getFirstFrameFromData()
-       frames = self.frame_generator.generateFrames(startFrame, frameCount, transform, isCyclical)
+       frames = self.frame_generator.generateFrames(startFrame, frameCount, transformType, isCyclical)
        sh.createSequence(frames, ijkToRas)
 
     @staticmethod
@@ -196,7 +203,7 @@ class TemporalVoxelTrackingPlugin:
         return rot @ (x-dim/2) + dim/2
 
     def on_generate_rotation(self):
-        self.generate_transform(self.rotate, 4, False)
+        self.generate_transform(0, 4, False)
 
     @staticmethod
     def pulsate(x, t, dim, total):
@@ -204,7 +211,7 @@ class TemporalVoxelTrackingPlugin:
         return (x - dim / 2) * pulse + dim / 2
 
     def on_generate_pulsation(self):
-        self.generate_transform(self.pulsate, 7, True)
+        self.generate_transform(1, 7, True)
 
     def pulsate_with_noise(self, x, t, dim, total):
         noiseMovement = np.array([10, 0, 0]) * t
@@ -219,31 +226,48 @@ class TemporalVoxelTrackingPlugin:
             print("Perlin noise not initialized!")
             return
         frames = 9
-        self.generate_transform(self.pulsate_with_noise, frames, False)
+        self.generate_transform(2, frames, False)
 
     def on_dvc_test_pulse_action_triggered(self):
-        self.dvc_test(self.pulsate)
+        self.dvc_test_legacy(self.pulsate)
 
     def on_dvc_test_noise_pulse_action_triggered(self):
         if self.perlin_noise is None:
             print("Perlin noise not initialized!")
             return
-        self.dvc_test(self.pulsate_with_noise)
+        self.dvc_test_legacy(self.pulsate_with_noise)
 
-    def dvc_test(self, transform):
+    def dvc_test(self, transform, frames, currentFrame, startingPoints, config):
+        results = np.zeros((len(frames) * len(startingPoints), 3))
+        resultsGT = np.zeros((len(frames) * len(startingPoints), 3))
+        times = np.zeros((len(startingPoints)))
+        for i in range(len(startingPoints)):
+            point = startingPoints[i]
+            points, pointsGT, time = self.temporal_voxel_tracking_engine.dvcTrackPointWithGT(point, transform, frames, currentFrame, config)
+            times[i] = time
+            for j in range(len(points)):
+                results[i * len(points) + j] = points[j]
+                resultsGT[i * len(pointsGT) + j] = pointsGT[j]
+            print(f"Done: {i+1} / {len(startingPoints)}")
+
+        return results, resultsGT, times
+
+    def dvc_test_legacy(self, transform):
         marker = sh.getSelectedMarker()
         if not marker:
             return
         ras2ijk = sh.getRAS2IJKMatrixForFirstAvailableVolume()
-        point = sh.getPointCoords(marker, ras2ijk)
+        markerPoints = sh.getPointsCoords(marker, ras2ijk)
         slicer.mrmlScene.RemoveNode(marker)
         frames, currentFrame = sh.getFramesFromFirstAvailable()
         config = (31, False, 'linear')
-        points, pointsGT, time = self.temporal_voxel_tracking_engine.dvcTrackPointWithGT(point, transform, frames, currentFrame, config)
-        fi.savePointWithGT(points, pointsGT, config, time)
+
+        results, resultsGT, times = self.dvc_test(transform, frames, currentFrame, markerPoints, config)
+
+        fi.savePointsWithGT(results, resultsGT, len(markerPoints), config, times)
         ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
-        sh.createMarkers(points, ijk2ras, 'Algorithm Deduction', '')
-        sh.createMarkers(pointsGT, ijk2ras, 'Ground Truth', 'GT')
+        node = sh.createMarkers(results, ijk2ras, 'Algorithm Deduction', '')
+        node.GetDisplayNode().SetTextScale(0)
 
     def initialize_perlin_noise(self, dim):
         print("Generating noise")
@@ -284,6 +308,73 @@ class TemporalVoxelTrackingPlugin:
         self.perlin_noise = RegularGridInterpolator((range_x, range_y, range_z), perlin_noise, fill_value=0.0, bounds_error=False)
 
         print("Perlin noise loaded")
+
+    def on_import_selected_markers_action_triggered(self):
+        todo()
+        # marker = sh.getSelectedMarker()
+        # ras2ijk = sh.getRAS2IJKMatrixForFirstAvailableVolume()
+        # point = sh.getPointCoords(marker, ras2ijk)
+        pass
+
+    def on_dvc_test_resolution(self):
+        # normalizedRadius = 0.5
+        # resolution = 100
+        # halfResolution = resolution // 2
+        # radius = halfResolution * normalizedRadius
+        # dimensions = (resolution, resolution, resolution)
+        # sphere = self.data_generator.generate_sphere(dimensions, radius)
+        # animation = self.frame_generator.generateFrames(sphere, 10, 1, True)
+        # sh.createSequence(np.array(animation))
+        # return
+
+        # resolution = 256
+        # frames = fi.loadArray(f"test\\resolution_test\\{resolution}\\sphere_{resolution}.npy")
+        # sh.createSequence(frames)
+        # points, pointsGT = fi.loadPointsWithGT(f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
+        # sh.createMarkers(points, None, 'Algorithm Deduction', '')
+        # sh.createMarkers(pointsGT, None, 'Ground Truth', '')
+        # return
+
+        normalizedRadius = 0.5
+
+        numPoints = 5
+        np.random.seed(123)
+        startingPoints = np.random.randn(numPoints, 3)
+        startingPoints /= np.linalg.norm(startingPoints, axis=1)[:, np.newaxis]
+        startingPoints *= normalizedRadius
+
+        transformType = 1
+        transform = self.pulsate
+
+        resolutions = (64, 256)#203, 232, 256)
+        windows = (31, 31)
+        # resolutions = (161, 203, 232, 256)
+        for resolution, window in zip(resolutions, windows):
+            print(f'Testing resolution {resolution}')
+            halfResolution = resolution // 2
+            radius = halfResolution * normalizedRadius
+            dimensions = (resolution, resolution, resolution)
+
+            points = startingPoints * halfResolution + halfResolution
+
+            frames = fi.loadArray(f"test\\resolution_test\\{resolution}\\sphere_{resolution}.npy")
+            print(f"Trying to load sphere_{resolution}.npy")
+            if frames is None:
+                print(f"Generating sphere_{resolution}.npy")
+                sphere = self.data_generator.generate_sphere(dimensions, radius)
+                animation = self.frame_generator.generateFrames(sphere, 10, transformType, True)
+                frames = np.array(animation)
+                fi.saveArray(f"test\\resolution_test\\{resolution}\\sphere_{resolution}.npy", frames)
+                print(f"Generated and saved sphere_{resolution}.npy")
+
+            print(f"Starting tracking tests...")
+            config = (window, False, 'linear')
+            results, resultsGT, times = self.dvc_test(transform, frames, 0, points, config)
+            fi.savePointsWithGT(results, resultsGT, len(points), config, times, f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
+            print(f"Saved result_sphere_{resolution}.csv")
+
+        # sh.createSequence(animation)
+        # sh.createMarkers(results, None, "Alg", "")
 
 
 # ------------------- MAIN -------------------
