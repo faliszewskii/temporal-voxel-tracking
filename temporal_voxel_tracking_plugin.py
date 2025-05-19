@@ -1,4 +1,6 @@
 import qt
+import scipy.interpolate
+
 import temporal_voxel_tracking as tvt
 import data_generator as dg
 import frame_generator as fg
@@ -63,6 +65,9 @@ class TemporalVoxelTrackingPlugin:
         points_menu = main_menu_bar.addMenu("Points")
         points_menu.setObjectName("PointsMenu")
 
+        abaqus_menu = main_menu_bar.addMenu("Abaqus")
+        abaqus_menu.setObjectName("AbaqusMenu")
+
         self.add_action(optical_flow_menu, "Calculate optical flow for selected", self.on_calculate_optical_flow_action_triggered)
         optical_flow_menu.addSeparator()
         self.add_action(optical_flow_menu, "Show Optical Flow Magnitudes", self.on_show_magnitudes_action_triggered)
@@ -93,6 +98,7 @@ class TemporalVoxelTrackingPlugin:
 
         self.add_action(points_menu, "Export Selected Markers", self.on_import_selected_markers_action_triggered)
 
+        self.add_action(abaqus_menu, "Load Abaqus simulation", self.on_load_abaqus_simulation)
 
     def generate(self, func):
         self.current_data = func()
@@ -327,13 +333,13 @@ class TemporalVoxelTrackingPlugin:
         # sh.createSequence(np.array(animation))
         # return
 
-        # resolution = 256
-        # frames = fi.loadArray(f"test\\resolution_test\\{resolution}\\sphere_{resolution}.npy")
-        # sh.createSequence(frames)
-        # points, pointsGT = fi.loadPointsWithGT(f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
-        # sh.createMarkers(points, None, 'Algorithm Deduction', '')
-        # sh.createMarkers(pointsGT, None, 'Ground Truth', '')
-        # return
+        resolution = 256
+        frames = fi.loadArray(f"test\\resolution_test\\{resolution}\\sphere_{resolution}.npy")
+        sh.createSequence(frames)
+        points, pointsGT = fi.loadPointsWithGT(f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
+        sh.createMarkers(points, None, 'Algorithm Deduction', '')
+        sh.createMarkers(pointsGT, None, 'Ground Truth', '')
+        return
 
         normalizedRadius = 0.5
 
@@ -376,6 +382,53 @@ class TemporalVoxelTrackingPlugin:
         # sh.createSequence(animation)
         # sh.createMarkers(results, None, "Alg", "")
 
+    def on_load_abaqus_simulation(self):
+        relDir = 'abaqus\\coords\\test.npy'
+        dim = 256
+        data = fi.loadArray(relDir)
+
+        minX = data[0, 1, 0]
+        minY = data[0, 2, 0]
+        minZ = data[0, 3, 0]
+        maxX = data[0, 1, 0]
+        maxY = data[0, 2, 0]
+        maxZ = data[0, 3, 0]
+        for i in range(data.shape[0]):
+            vec = data[i, 1:, 0]
+            if(minX > vec[0]):
+                minX = vec[0]
+            if(minY > vec[1]):
+                minY = vec[1]
+            if(minZ > vec[2]):
+                minZ = vec[2]
+            if(maxX < vec[0]):
+                maxX = vec[0]
+            if(maxY < vec[1]):
+                maxY = vec[1]
+            if(maxZ < vec[2]):
+                maxZ = vec[2]
+        maxCoord = max(maxX, maxY, maxZ)
+        minCoord = min(minX, minY, minZ)
+
+        frames = []
+        for frame in range(data.shape[2]):
+            print(f"Interpolating frame: {frame}")
+            for i in range(data.shape[0]):
+                vec = data[i, 1:, frame]
+                vec = (vec - minCoord) / (maxCoord - minCoord)
+                data[i, 1:, frame] = vec
+
+            grid_x, grid_y, grid_z = np.mgrid[0:1:complex(dim), 0:1:complex(dim), 0:1:complex(dim)]
+            points = data[:, 1:4, frame]
+            values = data[:, 0, frame]
+
+            maxValue = np.max(values)
+            values = (values + 1) / (maxValue + 1)
+
+            frame0 = scipy.interpolate.griddata(points, values, (grid_x, grid_y, grid_z), fill_value=0.0, rescale=False,
+                                                method='linear')
+            frames.append(frame0)
+        sh.createSequence(frames)
 
 # ------------------- MAIN -------------------
 

@@ -7,12 +7,14 @@ import numpy as np
 from PIL import Image
 
 
+root_path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\'
+
 def randomword(length):
    letters = string.ascii_lowercase
    return ''.join(random.choice(letters) for i in range(length))
 
 def savePointWithGT(points, pointsGT, config, time):
-    path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\results\\transform_test_results_{randomword(6)}.csv'
+    path = root_path + f'results\\transform_test_results_{randomword(6)}.csv'
     # path = f'/home/faliszewskii/Repositories/temporal-voxel-tracking/results/transform_test_results_{randomword(6)}.csv'
 
     with open(path, 'a') as csvfile:
@@ -30,13 +32,13 @@ def savePointWithGT(points, pointsGT, config, time):
             csvwriter.writerow([point[0], point[1], point[2]])
 
 def saveArray(relDir, array):
-    path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\{relDir}'
+    path = root_path + relDir
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'wb') as f:
         np.save(f, array)
 
 def loadArray(relDir):
-    path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\{relDir}'
+    path = root_path + relDir
     if not os.path.exists(path):
         return None
     with open(path, 'rb') as f:
@@ -44,7 +46,7 @@ def loadArray(relDir):
 
 
 def savePointsWithGT(points, pointsGT, pointsCount, config, times, relPath=None):
-    path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\'
+    path = root_path
     fileCode = randomword(6)
     if path is None:
         path += f'results\\transform_test_results_{fileCode}.csv'
@@ -76,7 +78,7 @@ def savePointsWithGT(points, pointsGT, pointsCount, config, times, relPath=None)
 
 
 def loadPointsWithGT(relPath):
-    path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\' + relPath
+    path = root_path + relPath
 
     points = []
     pointsGT = []
