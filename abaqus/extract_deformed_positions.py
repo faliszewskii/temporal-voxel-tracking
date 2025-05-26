@@ -6,6 +6,7 @@ from symbolicConstants import *
 from abaqusConstants import *
 
 root_path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\'
+# root_path = f'C:\\temp\\'
 
 
 def extract_deformed_positions(odbPath, inpPath):
@@ -96,12 +97,14 @@ def extract_deformed_positions(odbPath, inpPath):
 
 
 # Example Usage
-odb_path = 'abaqus_odb\\comp\\composite\\Job-1.odb'
-inp_path = 'abaqus_odb\\comp\\composite\\Job-1.inp'
+odb_path = 'abaqus_odb\\hiper_elastic\\Job-4.odb'
+# odb_path = 'Job-1.odb'
+inp_path = 'abaqus_odb\\hiper_elastic\\Job-4.inp'
+# inp_path = 'Job-1.inp'
 deformed_positions = extract_deformed_positions(odb_path, inp_path)
 
 print(deformed_positions.shape)
-relDir = 'abaqus\\coords\\test.npy'
+relDir = 'abaqus\\coords\\hiper_elastic.npy'
 array = deformed_positions
 
 path = root_path + relDir

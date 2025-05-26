@@ -45,7 +45,7 @@ def loadArray(relDir):
         return np.load(f)
 
 
-def savePointsWithGT(points, pointsGT, pointsCount, config, times, relPath=None):
+def savePointsWithGT(points, pointsGT, correlations, pointsCount, config, times, relPath=None):
     path = root_path
     fileCode = randomword(6)
     if path is None:
@@ -62,6 +62,8 @@ def savePointsWithGT(points, pointsGT, pointsCount, config, times, relPath=None)
             labels += [f"AP_{i}_x", f"AP_{i}_y", f"AP_{i}_z"]
         for i in range(frameCount):
             labels += [f"GT_{i}_x", f"GT_{i}_y", f"GT_{i}_z"]
+        for i in range(frameCount-1):
+            labels += [f"COR_{i+1}"]
         csvwriter.writerow(labels)
 
         for i in range(pointsCount):
@@ -72,6 +74,10 @@ def savePointsWithGT(points, pointsGT, pointsCount, config, times, relPath=None)
             for frame in range(frameCount):
                 point = pointsGT[i * frameCount + frame]
                 row += [point[0], point[1], point[2]]
+            for frame in range(frameCount-1):
+                if len(correlations) == 0:
+                    break
+                row += [correlations[i * (frameCount-1) + frame]]
             csvwriter.writerow(row)
 
     print(f"result saved to {path}")

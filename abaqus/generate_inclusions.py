@@ -27,34 +27,47 @@ inc_box = assembly.Instance(dependent=ON, name='box', part=part_box)
 
 
 # data
-number_of_inclusions = 30
-min_gap = 0.02
+circles_count_edge = 6
+cell_count = circles_count_edge
+cell_length = 1 / cell_count
+mean_radius = cell_length / 4
+
+# number_of_inclusions = 200
+# min_gap = 0.02
 it = 1
 it_max = 100
-radius  = lambda:   0.05 + np.random.rand()*0.15
+radius = lambda: mean_radius + np.random.rand()*mean_radius*0.1
+offset = lambda: (np.random.rand(3)*2-1) * mean_radius
 data = []
-x1 = np.random.rand()
-y1 = np.random.rand()
-z1 = np.random.rand()
-r1 = radius()
-data.append([x1,y1,z1, r1])
-run = True
-while run:
-	it +=1
-	r1= radius()
-	x1 = np.random.rand()
-	y1 = np.random.rand()
-	z1 = np.random.rand()
-	for d in data:
-		x2, y2, z2, r2 = d
-		distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2) - r1 -r2
-		if distance<min_gap:break
-	else:
-		data.append([x1,y1,z1, r1])
-	if len(data)==number_of_inclusions: run = False
-	if it>it_max:
-		run=False
-		print("error")
+for i in range(circles_count_edge):
+	for j in range(circles_count_edge):
+		for k in range(circles_count_edge):
+			x = (np.array([0.5, 0.5, 0.5]) + np.array([i, j, k])) * cell_length + offset()
+			data.append([x[0], x[1], x[2], radius()])
+
+
+# x1 = np.random.rand()
+# y1 = np.random.rand()
+# z1 = np.random.rand()
+# r1 = radius()
+# data.append([x1,y1,z1, r1])
+# run = True
+# while run:
+# 	it +=1
+# 	r1= radius()
+# 	x1 = np.random.rand()
+# 	y1 = np.random.rand()
+# 	z1 = np.random.rand()
+# 	for d in data:
+# 		x2, y2, z2, r2 = d
+# 		distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2) - r1 -r2
+# 		if distance<min_gap:break
+# 	else:
+# 		data.append([x1,y1,z1, r1])
+# 	if len(data)==number_of_inclusions: run = False
+# 	if it>it_max:
+# 		run=False
+# 		print("error")
 
 # inclusion loop
 inclusion_list = []

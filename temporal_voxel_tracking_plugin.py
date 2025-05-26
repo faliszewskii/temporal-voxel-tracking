@@ -68,6 +68,9 @@ class TemporalVoxelTrackingPlugin:
         abaqus_menu = main_menu_bar.addMenu("Abaqus")
         abaqus_menu.setObjectName("AbaqusMenu")
 
+        load_menu = main_menu_bar.addMenu("Load")
+        load_menu.setObjectName("LoadMenu")
+
         self.add_action(optical_flow_menu, "Calculate optical flow for selected", self.on_calculate_optical_flow_action_triggered)
         optical_flow_menu.addSeparator()
         self.add_action(optical_flow_menu, "Show Optical Flow Magnitudes", self.on_show_magnitudes_action_triggered)
@@ -98,7 +101,11 @@ class TemporalVoxelTrackingPlugin:
 
         self.add_action(points_menu, "Export Selected Markers", self.on_import_selected_markers_action_triggered)
 
-        self.add_action(abaqus_menu, "Load Abaqus simulation", self.on_load_abaqus_simulation)
+        self.add_action(abaqus_menu, "Import Abaqus simulation", self.on_load_abaqus_simulation)
+        self.add_action(abaqus_menu, "Test with Simulation", self.on_test_with_simulation)
+        self.add_action(abaqus_menu, "Perform resolution test with simulation", self.on_resolution_test_with_simulation)
+
+        self.add_action(load_menu, "Load dvc test", self.on_load_dvc_test)
 
     def generate(self, func):
         self.current_data = func()
@@ -243,7 +250,23 @@ class TemporalVoxelTrackingPlugin:
             return
         self.dvc_test_legacy(self.pulsate_with_noise)
 
-    def dvc_test(self, transform, frames, currentFrame, startingPoints, config):
+    def dvc_test(self, frames, currentFrame, startingPoints, config):
+        results = np.zeros((len(frames) * len(startingPoints), 3))
+        times = np.zeros((len(startingPoints)))
+        correlations = np.zeros(((len(frames)-1) * len(startingPoints)))
+        for i in range(len(startingPoints)):
+            point = startingPoints[i]
+            result, time, correlation = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, currentFrame, config)
+            times[i] = time
+            for j in range(len(result)):
+                results[i * len(result) + j] = result[j]
+            for j in range(len(correlation)):
+                correlations[i * len(correlation) + j] = correlation[j]
+            print(f"Done: {i+1} / {len(startingPoints)}")
+
+        return results, times, correlations
+
+    def dvc_test_legacy2(self, transform, frames, currentFrame, startingPoints, config):
         results = np.zeros((len(frames) * len(startingPoints), 3))
         resultsGT = np.zeros((len(frames) * len(startingPoints), 3))
         times = np.zeros((len(startingPoints)))
@@ -268,9 +291,9 @@ class TemporalVoxelTrackingPlugin:
         frames, currentFrame = sh.getFramesFromFirstAvailable()
         config = (31, False, 'linear')
 
-        results, resultsGT, times = self.dvc_test(transform, frames, currentFrame, markerPoints, config)
+        results, resultsGT, times = self.dvc_test_legacy2(transform, frames, currentFrame, markerPoints, config)
 
-        fi.savePointsWithGT(results, resultsGT, len(markerPoints), config, times)
+        fi.savePointsWithGT(results, resultsGT, [], len(markerPoints), config, times)
         ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
         node = sh.createMarkers(results, ijk2ras, 'Algorithm Deduction', '')
         node.GetDisplayNode().SetTextScale(0)
@@ -375,16 +398,22 @@ class TemporalVoxelTrackingPlugin:
 
             print(f"Starting tracking tests...")
             config = (window, False, 'linear')
-            results, resultsGT, times = self.dvc_test(transform, frames, 0, points, config)
-            fi.savePointsWithGT(results, resultsGT, len(points), config, times, f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
+            results, resultsGT, times = self.dvc_test_legacy2(transform, frames, 0, points, config)
+            fi.savePointsWithGT(results, resultsGT, [], len(points), config, times, f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
             print(f"Saved result_sphere_{resolution}.csv")
 
         # sh.createSequence(animation)
         # sh.createMarkers(results, None, "Alg", "")
 
     def on_load_abaqus_simulation(self):
-        relDir = 'abaqus\\coords\\test.npy'
         dim = 256
+        data_path = 'abaqus\\coords\\hiper_elastic.npy'
+        simulation_data = fi.loadArray(data_path)
+        frames = self.load_abaqus_simulation(simulation_data, dim)
+        sh.createSequence(frames)
+
+    def load_abaqus_simulation(self, dim):
+        relDir = 'abaqus\\coords\\hiper_elastic.npy'
         data = fi.loadArray(relDir)
 
         minX = data[0, 1, 0]
@@ -395,17 +424,17 @@ class TemporalVoxelTrackingPlugin:
         maxZ = data[0, 3, 0]
         for i in range(data.shape[0]):
             vec = data[i, 1:, 0]
-            if(minX > vec[0]):
+            if (minX > vec[0]):
                 minX = vec[0]
-            if(minY > vec[1]):
+            if (minY > vec[1]):
                 minY = vec[1]
-            if(minZ > vec[2]):
+            if (minZ > vec[2]):
                 minZ = vec[2]
-            if(maxX < vec[0]):
+            if (maxX < vec[0]):
                 maxX = vec[0]
-            if(maxY < vec[1]):
+            if (maxY < vec[1]):
                 maxY = vec[1]
-            if(maxZ < vec[2]):
+            if (maxZ < vec[2]):
                 maxZ = vec[2]
         maxCoord = max(maxX, maxY, maxZ)
         minCoord = min(minX, minY, minZ)
@@ -428,7 +457,108 @@ class TemporalVoxelTrackingPlugin:
             frame0 = scipy.interpolate.griddata(points, values, (grid_x, grid_y, grid_z), fill_value=0.0, rescale=False,
                                                 method='linear')
             frames.append(frame0)
+        return frames
+
+    def create_starters(self, data, dim):
+        points = []
+        points_edge_count = 3
+        points_distance = 0.15
+        first_point = (1 - (points_edge_count - 1) * points_distance) / 2
+        for i in range(points_edge_count):
+            for j in range(points_edge_count):
+                for k in range(points_edge_count):
+                    x = np.repeat(first_point, 3) + np.array([i, j, k]) * points_distance
+                    x *= dim
+                    points.append(x)
+
+        # For each marker find the closest data point
+        starters = []
+        ground_truths = []
+        data_count = data.shape[0]
+        data_points = data[:, 1:, 0]
+        for point in points:
+            point = np.array(point) / np.array(dim)
+
+            def key_func(key):
+                return np.linalg.norm(point - data_points[key, :])
+
+            index_min = min(range(data_count), key=key_func)
+            starters.append(data_points[index_min, :] * np.array(dim))
+            ground_truth = np.transpose(data[index_min, 1:, :])
+            for i in range(ground_truth.shape[0]):
+                ground_truth[i, :] = ground_truth[i, :] * np.array(dim)
+            ground_truths.append(ground_truth)
+        ground_truths = np.vstack(ground_truths)
+        return starters, ground_truths
+
+    def on_test_with_simulation(self):
+        # Usual setup for the test
+        ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
+        frames, currentFrame = sh.getFramesFromFirstAvailable()
+        dim = frames[0].shape
+        config = (31, False, 'linear')
+
+        # Load simulation
+        relDir = 'abaqus\\coords\\hiper_elastic.npy'
+        data = fi.loadArray(relDir)
+
+        # Get existing points
+        # marker = sh.getSelectedMarker()
+        # if not marker:
+        #     return
+        # ras2ijk = sh.getRAS2IJKMatrixForFirstAvailableVolume()
+        # points = sh.getPointsCoords(marker, ras2ijk)
+        # slicer.mrmlScene.RemoveNode(marker)
+        # OR
+        # Create points on grid
+        starters, ground_truths = self.create_starters(data, dim)
+
+        results, times, correlations = self.dvc_test(frames, currentFrame, starters, config)
+
+        # sh.createMarkers(starters, ijk2ras, "Closest Starters", "S")
+        sh.createMarkers(results, ijk2ras, "Algorithm Deduction", "AD-")
+        sh.createMarkers(ground_truths, ijk2ras, "Ground Truth", "GT-")
+
+        fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times, f'abaqus\\multiple_test.csv')
+        print(f'abaqus\\multiple_test.csv')
+
+    def on_resolution_test_with_simulation(self):
+        data_path = 'abaqus\\coords\\hiper_elastic.npy'
+        simulation_data = fi.loadArray(data_path)
+
+        # resolutions = (32, 64)  # 203, 232, 256)
+        windows = (64, 64)
+        resolutions = (256, 232)
+
+        for resolution, window in zip(resolutions, windows):
+            print(f'Testing resolution {resolution}')
+            cube_path = f"abaqus\\hiper_elastic_scene\\{resolution}\\cube_{resolution}.npy"
+            frames = fi.loadArray(cube_path)
+            print(f"Trying to load cube_{resolution}.npy")
+            if frames is None:
+                print(f"Generating cube_{resolution}.npy")
+                frames = np.array(self.load_abaqus_simulation(resolution))
+                fi.saveArray(cube_path, frames)
+                print(f"Generated and saved cube_{resolution}.npy")
+
+            print(f"Starting tracking tests...")
+            config = (window, False, 'linear')
+            starters, ground_truths = self.create_starters(simulation_data, resolution)
+            results, times, correlations = self.dvc_test(frames, 0, starters, config)
+            # results, resultsGT, times = self.dvc_test_legacy2(transform, frames, 0, points, config)
+            fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times,
+                                f'abaqus\\hiper_elastic_scene\\{resolution}\\result_cube_{resolution}.csv')
+            print(f"Saved result_cube_{resolution}.csv")
+
+    def on_load_dvc_test(self):
+        resolution = 276
+        frames = fi.loadArray(f"abaqus\\hiper_elastic_scene\\{resolution}\\cube_{resolution}.npy")
         sh.createSequence(frames)
+        points, pointsGT = fi.loadPointsWithGT(f'abaqus\\hiper_elastic_scene\\{resolution}\\result_cube_{resolution}.csv')
+        ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
+        sh.createMarkers(points, ijk2ras, "Algorithm Deduction", "AD-")
+        sh.createMarkers(pointsGT, ijk2ras, "Ground Truth", "GT-")
+
 
 # ------------------- MAIN -------------------
 
