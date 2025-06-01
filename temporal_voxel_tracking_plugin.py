@@ -10,6 +10,7 @@ from slicer.util import getNode, getNodes
 from slicer.ScriptedLoadableModule import *
 import numpy as np
 import file_interface as fi
+from dvc.spline_interpolation import *
 from perlin_noise import PerlinNoise
 from scipy.interpolate import RegularGridInterpolator
 
@@ -250,13 +251,13 @@ class TemporalVoxelTrackingPlugin:
             return
         self.dvc_test_legacy(self.pulsate_with_noise)
 
-    def dvc_test(self, frames, currentFrame, startingPoints, config):
+    def dvc_test(self, frames, frames_coeffs, currentFrame, startingPoints, config):
         results = np.zeros((len(frames) * len(startingPoints), 3))
         times = np.zeros((len(startingPoints)))
         correlations = np.zeros(((len(frames)-1) * len(startingPoints)))
         for i in range(len(startingPoints)):
             point = startingPoints[i]
-            result, time, correlation = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, currentFrame, config)
+            result, time, correlation = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, frames_coeffs, currentFrame, config)
             times[i] = time
             for j in range(len(result)):
                 results[i * len(result) + j] = result[j]
@@ -461,7 +462,7 @@ class TemporalVoxelTrackingPlugin:
 
     def create_starters(self, data, dim):
         points = []
-        points_edge_count = 3
+        points_edge_count = 2
         points_distance = 0.15
         first_point = (1 - (points_edge_count - 1) * points_distance) / 2
         for i in range(points_edge_count):
@@ -522,36 +523,105 @@ class TemporalVoxelTrackingPlugin:
         fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times, f'abaqus\\multiple_test.csv')
         print(f'abaqus\\multiple_test.csv')
 
+    # def on_resolution_test_with_simulation(self):
+    #     frames, current_frame = sh.getFramesFromFirstAvailable()
+    #     n = 4
+    #     frames = frames[0, ::n, ::n, ::n]
+    #
+    #
+    #     # frames_coeffs = np.zeros((frames.shape[0], frames.shape[1] + 6, frames.shape[2] + 6, frames.shape[3] + 6))
+    #     # for frame in range(frames.shape[0]):
+    #     #     frames_coeffs[frame] = calculate_spline5_coefficients(frames[frame, :, :, :])
+    #
+    #     coeffs = calculate_spline5_coefficients(frames)
+    #     factor = 4
+    #     sx, sy, s10 = np.meshgrid(np.linspace(0, frames.shape[0] - 1, frames.shape[0] * factor),
+    #                               np.linspace(0, frames.shape[1] - 1, frames.shape[1] * factor),
+    #                               np.linspace(0, frames.shape[2] - 1, frames.shape[2] * factor), indexing='ij')
+    #     sz = interpolate_spline5(np.array([sx, sy, s10]), coeffs)
+    #
+    #     frames = np.repeat(np.repeat(np.repeat(frames,factor, axis=0), factor, axis=1), factor, axis=2)
+    #     sh.createSequence([frames])
+    #     sh.createSequence([sz])
+    #     result = self.temporal_voxel_tracking_engine.vt.dvc.find_correlated_point(frames, sz, np.array([48,48,48]), 31, False, "linear")
+    #     print(result)
+    #     result = self.temporal_voxel_tracking_engine.vt.dvc.find_correlated_point(frames, sz, np.array([96,48,48]), 31, False, "linear")
+    #     print(result)
+    #     result = self.temporal_voxel_tracking_engine.vt.dvc.find_correlated_point(frames, sz, np.array([48,96,48]), 31, False, "linear")
+    #     print(result)
+    #     result = self.temporal_voxel_tracking_engine.vt.dvc.find_correlated_point(frames, sz, np.array([48,48,96]), 31, False, "linear")
+    #     print(result)
+
     def on_resolution_test_with_simulation(self):
         data_path = 'abaqus\\coords\\hiper_elastic.npy'
         simulation_data = fi.loadArray(data_path)
 
         # resolutions = (32, 64)  # 203, 232, 256)
-        windows = (64, 64)
-        resolutions = (256, 232)
-
+        windows = (31, 31, 31)
+        resolutions = (161, 203, 232)
+        interpolation = "spline5"
         for resolution, window in zip(resolutions, windows):
             print(f'Testing resolution {resolution}')
             cube_path = f"abaqus\\hiper_elastic_scene\\{resolution}\\cube_{resolution}.npy"
             frames = fi.loadArray(cube_path)
+            # frames = np.array([frames[0], frames[frames.shape[0]-1]])  # TEST limit to 2 only
             print(f"Trying to load cube_{resolution}.npy")
             if frames is None:
                 print(f"Generating cube_{resolution}.npy")
                 frames = np.array(self.load_abaqus_simulation(resolution))
                 fi.saveArray(cube_path, frames)
                 print(f"Generated and saved cube_{resolution}.npy")
+            frames_coeffs = np.zeros((frames.shape[0], frames.shape[1]+6, frames.shape[2]+6, frames.shape[3]+6))
+            for frame in range(frames.shape[0]):
+                frames_coeffs[frame] = calculate_spline5_coefficients(frames[frame, :, :, :])
+            #
+            # sh.createSequence(frames_coeffs[:, 4:-3, 4:-3, 4:-3])
+            #
+            # slice = frames[0, :, :, :]
+            # # print(slice.shape)
+            # # ix, iy = np.indices(slice.shape)
+            # factor = 4
+            # sx, sy, s10 = np.meshgrid(np.linspace(0, slice.shape[0] - 1, slice.shape[0] * factor),
+            #                           np.linspace(0, slice.shape[1] - 1, slice.shape[1] * factor),
+            #                           np.linspace(0, slice.shape[2] - 1, slice.shape[2] * factor), indexing='ij')
+            # sz = interpolate_spline5(np.array([sx, sy, s10]), frames_coeffs[0])
+            # # sx = sx[:,:,0]
+            # # sy = sy[:,:,0]
+            # # sz = sz[:,:,0]
+            # # #xyz_vectors = np.stack([x, sy, szs], axis=-1)
+            # #
+            # slice = np.repeat(np.repeat(np.repeat(slice,factor, axis=0), factor, axis=1), factor, axis=2)
+            # sh.createSequence([slice])
+            # sh.createSequence([sz])
+            # result = self.temporal_voxel_tracking_engine.vt.dvc.find_correlated_point(slice, sz, np.array([48,48,48]), 31, False, "linear")
+            # print(result)
+            # slice = [slice[i] for i in range(slice.shape[0])]
+
+            # Now use the density values from the slice as z coordinates
+            # iz = slice[ix, iy]
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111, projection='3d')
+
+            # ax.scatter(ix.flatten(), iy.flatten(), iz.flatten(), c=iz.flatten(), cmap='viridis', marker='o')
+            # # ax.plot_surface(sx, sy, sz, linewidth=0, cmap=cm.coolwarm, antialiased=False)
+            # ax.set_xlabel('X')
+            # ax.set_ylabel('Y')
+            # ax.set_zlabel('Density')
+            # root_path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\'
+            # savefig(root_path + "11.png")
+
+            # interpolate_spline5(frames[0, :, :, :], np.array([10, 10, 10]), coeffs)
 
             print(f"Starting tracking tests...")
-            config = (window, False, 'linear')
+            config = (window, False, interpolation)
             starters, ground_truths = self.create_starters(simulation_data, resolution)
-            results, times, correlations = self.dvc_test(frames, 0, starters, config)
-            # results, resultsGT, times = self.dvc_test_legacy2(transform, frames, 0, points, config)
+            results, times, correlations = self.dvc_test(frames, frames_coeffs,0, starters, config)
             fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times,
                                 f'abaqus\\hiper_elastic_scene\\{resolution}\\result_cube_{resolution}.csv')
             print(f"Saved result_cube_{resolution}.csv")
 
     def on_load_dvc_test(self):
-        resolution = 276
+        resolution = 128
         frames = fi.loadArray(f"abaqus\\hiper_elastic_scene\\{resolution}\\cube_{resolution}.npy")
         sh.createSequence(frames)
         points, pointsGT = fi.loadPointsWithGT(f'abaqus\\hiper_elastic_scene\\{resolution}\\result_cube_{resolution}.csv')

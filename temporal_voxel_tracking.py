@@ -641,8 +641,8 @@ class TemporalVoxelTrackingEngine:
 
         return points, pointsGT, end - start
 
-    def dvcTrackPoint(self, startPoint, frames, currentFrame, config):
+    def dvcTrackPoint(self, startPoint, frames, frames_coeffs, currentFrame, config):
         start = time.time()
-        points, correlations = self.vt.track(frames, currentFrame, startPoint, config[0], config[1], config[2])
+        points, correlations = self.vt.track(frames, frames_coeffs, currentFrame, startPoint, config[0], config[1], config[2])
         end = time.time()
         return points, end - start, correlations
