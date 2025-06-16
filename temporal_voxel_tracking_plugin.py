@@ -10,9 +10,9 @@ from slicer.util import getNode, getNodes
 from slicer.ScriptedLoadableModule import *
 import numpy as np
 import file_interface as fi
-from dvc.spline_interpolation import *
 from perlin_noise import PerlinNoise
 from scipy.interpolate import RegularGridInterpolator
+import dvc.spline_interpolation as spline
 
 import slicer_helpers as sh
 
@@ -251,13 +251,17 @@ class TemporalVoxelTrackingPlugin:
             return
         self.dvc_test_legacy(self.pulsate_with_noise)
 
-    def dvc_test(self, frames, frames_coeffs, currentFrame, startingPoints, config):
+    def dvc_test(self, frames, currentFrame, startingPoints, config):
+        spline_interpolators = []
+        for frame in frames:
+            spline_interpolators.append(spline.Spline5Interpolator3d(frame))
+
         results = np.zeros((len(frames) * len(startingPoints), 3))
         times = np.zeros((len(startingPoints)))
         correlations = np.zeros(((len(frames)-1) * len(startingPoints)))
         for i in range(len(startingPoints)):
             point = startingPoints[i]
-            result, time, correlation = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, frames_coeffs, currentFrame, config)
+            result, time, correlation = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, spline_interpolators, currentFrame, config)
             times[i] = time
             for j in range(len(result)):
                 results[i * len(result) + j] = result[j]
@@ -557,8 +561,8 @@ class TemporalVoxelTrackingPlugin:
         simulation_data = fi.loadArray(data_path)
 
         # resolutions = (32, 64)  # 203, 232, 256)
-        windows = (31, 31, 31)
-        resolutions = (161, 203, 232)
+        windows = (63, )
+        resolutions = (256, )
         interpolation = "spline5"
         for resolution, window in zip(resolutions, windows):
             print(f'Testing resolution {resolution}')
@@ -571,9 +575,6 @@ class TemporalVoxelTrackingPlugin:
                 frames = np.array(self.load_abaqus_simulation(resolution))
                 fi.saveArray(cube_path, frames)
                 print(f"Generated and saved cube_{resolution}.npy")
-            frames_coeffs = np.zeros((frames.shape[0], frames.shape[1]+6, frames.shape[2]+6, frames.shape[3]+6))
-            for frame in range(frames.shape[0]):
-                frames_coeffs[frame] = calculate_spline5_coefficients(frames[frame, :, :, :])
             #
             # sh.createSequence(frames_coeffs[:, 4:-3, 4:-3, 4:-3])
             #
@@ -615,7 +616,7 @@ class TemporalVoxelTrackingPlugin:
             print(f"Starting tracking tests...")
             config = (window, False, interpolation)
             starters, ground_truths = self.create_starters(simulation_data, resolution)
-            results, times, correlations = self.dvc_test(frames, frames_coeffs,0, starters, config)
+            results, times, correlations = self.dvc_test(frames, 0, starters, config)
             fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times,
                                 f'abaqus\\hiper_elastic_scene\\{resolution}\\result_cube_{resolution}.csv')
             print(f"Saved result_cube_{resolution}.csv")

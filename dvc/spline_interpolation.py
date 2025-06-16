@@ -1,84 +1,91 @@
-
 import numpy as np
 from scipy.fft import fft, ifft
 
-def calculate_spline5_coefficients(data, padding=3):
-    eps = 1e-5
-    kernel = [1/120, 13/60, 11/20, 13/60, 1/120, 0]
-    result = np.pad(data, padding, mode='edge')
-    dims = result.shape
 
-    for d in range(len(dims)):
-        dim = dims[d]
-        padded_kernel = np.pad(kernel, (0, dim-6), 'constant', constant_values=0)
-        padded_kernel = np.roll(padded_kernel, -2)
+class Spline5Interpolator3d:
 
-        freq_kernel = fft(padded_kernel)
-        freq_kernel[np.abs(freq_kernel) < eps] = eps
-        freq_data = fft(result, axis=d)
+    def __init__(self, data, padding=3):
+        self.padding = padding
+        self.coefficients = self.calculate_spline5_coefficients(data)
+        self.basis_matrix_dictionary = dict()
+        self.dim = data.shape
+        self.exp_to_bs5 = np.array([
+            [1/120,  13/60, 11/20, 13/60, 1/120, 0],
+            [-1/24,  -5/12, 0,     5/12,  1/24,  0],
+            [1/12,   1/6,   -1/2,  1/6,   1/12,  0],
+            [-1/12,  1/6,   0,     -1/6,  1/12,  0],
+            [1/24,   -1/6,  1/4,   -1/6,  1/24,  0],
+            [-1/120, 1/24,  -1/12, 1/12,  -1/24, 1/120]
+        ])  # (6, 6)
+        offset_range = np.arange(-2, 4)
+        ox, oy, oz = np.meshgrid(offset_range, offset_range, offset_range, indexing='ij')
+        self.ox = ox.ravel()
+        self.oy = oy.ravel()
+        self.oz = oz.ravel()
 
-        reshape_dims = [1] * len(dims)
-        reshape_dims[d] = freq_kernel.shape[0]
-        freq_kernel = freq_kernel.reshape(reshape_dims)
+    def calculate_spline5_coefficients(self, data):
+        eps = 1e-5
+        kernel = [1/120, 13/60, 11/20, 13/60, 1/120, 0]
+        result = np.pad(data, self.padding, mode='edge')
+        dims = result.shape
 
-        result = ifft(freq_data / freq_kernel, axis=d)
+        for d in range(len(dims)):
+            dim = dims[d]
+            padded_kernel = np.pad(kernel, (0, dim-6), 'constant', constant_values=0)
+            padded_kernel = np.roll(padded_kernel, -2)
 
-    return np.real(result)
+            freq_kernel = fft(padded_kernel)
+            freq_kernel[np.abs(freq_kernel) < eps] = eps
+            freq_data = fft(result, axis=d)
 
+            reshape_dims = [1] * len(dims)
+            reshape_dims[d] = freq_kernel.shape[0]
+            freq_kernel = freq_kernel.reshape(reshape_dims)
 
-def interpolate_spline5(grid, coeffs, padding=3, batch_size=100_000):
-    exp_to_bs5 = np.array([
-        [1/120,  13/60, 11/20, 13/60, 1/120, 0],
-        [-1/24,  -5/12, 0,     5/12,  1/24,  0],
-        [1/12,   1/6,   -1/2,  1/6,   1/12,  0],
-        [-1/12,  1/6,   0,     -1/6,  1/12,  0],
-        [1/24,   -1/6,  1/4,   -1/6,  1/24,  0],
-        [-1/120, 1/24,  -1/12, 1/12,  -1/24, 1/120]
-    ])
+            result = ifft(freq_data / freq_kernel, axis=d)
 
-    coords = np.stack([g.flatten() for g in grid], axis=0)  # (3, N)
-    N = coords.shape[1]
-    results = []
+        return np.real(result)
 
-    offset_range = np.arange(-2, 4)
-    ox, oy, oz = np.meshgrid(offset_range, offset_range, offset_range, indexing='ij')
-    ox = ox.ravel()
-    oy = oy.ravel()
-    oz = oz.ravel()
+    def interpolate(self, grid):
+        coords = np.stack([g.flatten() for g in grid], axis=1)
+        fxArr = np.floor(coords).astype(int)
+        dxArr = coords - fxArr
+        indices = np.array([self.encode_xyz(fx[0], fx[1], fx[2], self.dim[1], self.dim[2]) for fx in fxArr])
 
-    for start in range(0, N, batch_size):
-        end = min(start + batch_size, N)
-        coords_batch = coords[:, start:end]  # (3, B)
-        B = coords_batch.shape[1]
+        is_cached = np.array([i in self.basis_matrix_dictionary for i in indices])
+        uncached_fxs = fxArr[~is_cached]
+        uncached_indices = indices[~is_cached]
 
-        fx = np.floor(coords_batch).astype(int)
-        dx = coords_batch - fx
+        if len(uncached_fxs) > 0:
+            print(f'Uncached indices: {len(uncached_indices)}')
+            print(f'Dictionary size: {len(self.basis_matrix_dictionary)}')
 
-        # Build basis weights
-        v = np.stack([np.ones(B), dx[0], dx[0]**2, dx[0]**3, dx[0]**4, dx[0]**5], axis=1)
-        wx = v @ exp_to_bs5  # (B, 6)
+            N = uncached_fxs.shape[0]
+            ix = uncached_fxs[:, 0][:, None] + self.ox[None, :] + self.padding  # (N, 216)
+            iy = uncached_fxs[:, 1][:, None] + self.oy[None, :] + self.padding
+            iz = uncached_fxs[:, 2][:, None] + self.oz[None, :] + self.padding
 
-        v = np.stack([np.ones(B), dx[1], dx[1]**2, dx[1]**3, dx[1]**4, dx[1]**5], axis=1)
-        wy = v @ exp_to_bs5
+            c = self.coefficients[ix, iy, iz].reshape(N, 6, 6, 6)
 
-        v = np.stack([np.ones(B), dx[2], dx[2]**2, dx[2]**3, dx[2]**4, dx[2]**5], axis=1)
-        wz = v @ exp_to_bs5
+            c = np.tensordot(c, self.exp_to_bs5, axes=([3], [1]))  # (N, 6, 6, 6)
+            c = np.tensordot(c, self.exp_to_bs5, axes=([2], [1]))  # (N, 6, 6, 6)
+            c = np.tensordot(c, self.exp_to_bs5, axes=([1], [1]))  # (N, 6, 6, 6)
 
-        ix = fx[0][:, None] + ox[None, :] + padding  # (B, 216)
-        iy = fx[1][:, None] + oy[None, :] + padding
-        iz = fx[2][:, None] + oz[None, :] + padding
+            for idx, w in zip(uncached_indices, c):
+                self.basis_matrix_dictionary[idx] = w
 
-        c = coeffs[ix, iy, iz]  # (B, 216)
+        dx_powers = dxArr[..., None] ** np.arange(6)  # shape: (N, 3, 6)
+        vx = dx_powers[:, 0, :]
+        vy = dx_powers[:, 1, :]
+        vz = dx_powers[:, 2, :]
 
-        # Compute weight products with broadcasting
-        wx_ = wx[:, :, None, None]
-        wy_ = wy[:, None, :, None]
-        wz_ = wz[:, None, None, :]
+        v = vx[:, None, None, :] * vy[:, None, :, None] * vz[:, :, None, None]  # (N,6,6,6)
 
-        weights = (wx_ * wy_ * wz_).reshape(B, 216)  # (B, 216)
-        result_batch = np.sum(weights * c, axis=1)  # (B,)
-        results.append(result_batch)
+        weights = np.array([self.basis_matrix_dictionary[i] for i in indices])  # shape: (N, 6, 6, 6)
+        result = np.sum(v*weights, axis=(1, 2, 3))  # (N,)
 
-    result = np.concatenate(results, axis=0)
-    return result.reshape(grid[0].shape)
+        return result.reshape(grid[0].shape)
 
+    @staticmethod
+    def encode_xyz(x, y, z, max_y=256, max_z=256):
+        return x * (max_y * max_z) + y * max_z + z

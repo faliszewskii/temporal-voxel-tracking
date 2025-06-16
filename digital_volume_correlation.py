@@ -3,8 +3,6 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 import scipy.optimize as opt
 
-from dvc.spline_interpolation import interpolate_spline5
-
 
 class DigitalVolumeCorrelation:
 
@@ -33,9 +31,7 @@ class DigitalVolumeCorrelation:
 
         diffs = lsc_left - right
 
-        nlsc = (diffs ** 2).sum()
-
-        return nlsc
+        return diffs.flatten()
 
     def cross_correlation_func_trans_spline(self, variable, original_coords, lsc_left, coeffs_deformed, grid):
         x, y, z = original_coords
@@ -43,7 +39,7 @@ class DigitalVolumeCorrelation:
 
         deformed_window = (grid[0] + x + u, grid[1] + y + v, grid[2] + z + w)
 
-        window2 = interpolate_spline5(deformed_window, coeffs_deformed)
+        window2 = coeffs_deformed.interpolate(deformed_window)
 
         return self.normalised_least_squares_criterion(lsc_left, window2)
 
@@ -55,7 +51,7 @@ class DigitalVolumeCorrelation:
                            y + grid[1] + v + dvx * grid[0] + dvy * grid[1] + dvz * grid[2],
                            z + grid[2] + w + dwx * grid[0] + dwy * grid[1] + dwz * grid[2])
 
-        window2 = interpolate_spline5(deformed_window, coeffs_deformed)
+        window2 = coeffs_deformed.interpolate(deformed_window)
 
         return self.normalised_least_squares_criterion(lsc_left, window2)
 
@@ -81,7 +77,7 @@ class DigitalVolumeCorrelation:
 
         return self.normalised_least_squares_criterion(lsc_left, window2)
 
-    def find_correlated_point(self, reference_volume, deformed_volume, ref_coeff, def_coeff, point, windowSizeConfig, onlyTranslationConfig, interpolationConfig):
+    def find_correlated_point(self, reference_volume, deformed_volume, ref_interpolator, def_interpolator, point, windowSizeConfig, onlyTranslationConfig, interpolationConfig):
         '''
         reference_volume, deformed_volume - 3D numpy array
         point - tuple (x, y, z)
@@ -100,7 +96,7 @@ class DigitalVolumeCorrelation:
         x, y, z = point
         reference_window = (x + grid[0], y + grid[1], z + grid[2])
         if interpolationConfig == 'spline5':
-            window_reference = interpolate_spline5(reference_window, ref_coeff)
+            window_reference = ref_interpolator.interpolate(reference_window)
         else:
             range_x = np.array(range(0, dim[0]))
             range_y = np.array(range(0, dim[1]))
@@ -117,7 +113,7 @@ class DigitalVolumeCorrelation:
 
         if interpolationConfig == 'spline5':
             # func_trans = lambda variable: self.cross_correlation_func_trans_spline(variable, point, lsc_left, def_coeff, grid)
-            func_full = lambda variable: self.cross_correlation_func_full_spline(variable, point, lsc_left, def_coeff, grid)
+            func_full = lambda variable: self.cross_correlation_func_full_spline(variable, point, lsc_left, def_interpolator, grid)
         else:
             # func_trans = lambda variable: self.cross_correlation_func_trans(variable, point, lsc_left, interpolated_deformed, grid, interpolationConfig)
             func_full = lambda variable: self.cross_correlation_func_full(variable, point, lsc_left, interpolated_deformed, grid, interpolationConfig)
@@ -138,5 +134,4 @@ class DigitalVolumeCorrelation:
 
         result = opt.least_squares(func_full, np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), bounds=bounds)
 
-        # print(result)
         return result.x[0], result.x[1], result.x[2], result.cost
