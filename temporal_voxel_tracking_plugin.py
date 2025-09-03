@@ -28,11 +28,13 @@ class TemporalVoxelTrackingPlugin:
         self.run_timer()
         self.frame_generator = fg.FrameGenerator()
         self.perlin_noise: RegularGridInterpolator = None
+        self.during_testing = False
+        self.test_number = 0
 
     def update_frame(self):
         id_track_point = 'Algorithm Deduction'
         if getNodes(id_track_point, None) and getNode(id_track_point).IsA('vtkMRMLMarkupsFiducialNode'):
-            self.temporal_voxel_tracking_engine.track_point()
+            self.temporal_voxel_tracking_engine.track_point(self.during_testing, self.test_number)
 
     def run_timer(self):
         self.timer = QTimer()
@@ -114,6 +116,8 @@ class TemporalVoxelTrackingPlugin:
 
         self.add_action(load_menu, "Load dvc test", self.on_load_dvc_test)
         self.add_action(load_menu, "Save dvc test (no gt)", self.on_save_dvc_test)
+        self.add_action(load_menu, "Start qualitative test", self.start_test)
+        self.add_action(load_menu, "Next qualitative test", self.next_test)
 
     def generate(self, func):
         self.current_data = func()
@@ -725,15 +729,15 @@ class TemporalVoxelTrackingPlugin:
             print(f"Saved result_cube_{resolution}.csv")
 
     def on_load_dvc_test(self):
-        resolution = 100
-        frames = fi.loadArray(f"abaqus\\meshes\\regular80\\{resolution}\\cube_{resolution}.npy")
-
-        sh.createSequence(frames)
-        points, pointsGT = fi.loadPointsWithGT(f'abaqus\\meshes\\regular80\\{resolution}\\result_cube_{resolution}.csv')
-        ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
-        sh.createMarkers(points, ijk2ras, "Algorithm Deduction", "")
-        sh.createMarkers(points, ijk2ras, "Ground Truth", "")
-        return
+        # resolution = 100
+        # frames = fi.loadArray(f"abaqus/meshes/regular80/{resolution}/cube_{resolution}.npy")
+        #
+        # sh.createSequence(frames)
+        # points, pointsGT = fi.loadPointsWithGT(f'abaqus/meshes/regular80/{resolution}/result_cube_{resolution}.csv')
+        # ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
+        # sh.createMarkers(points, ijk2ras, "Algorithm Deduction", "")
+        # sh.createMarkers(points, ijk2ras, "Ground Truth", "")
+        # return
 
         ####
 
@@ -792,6 +796,24 @@ class TemporalVoxelTrackingPlugin:
     #     points = sh.getPointsCoords(marker, ras2ijk)
     #     fi.savePoints(points)
 
+    def start_test(self, i = 0):
+        self.during_testing = True
+        id_track_point = 'Algorithm Deduction'
+        current_frame, frame_count = sh.getFramesFromFirstAvailable()
+        nodes = sh.getNodesWithName(id_track_point)
+        for node in nodes:
+            num = node.GetNumberOfControlPoints()
+            for point in range(num):
+                node.SetNthControlPointVisibility(point, False)
+        node = nodes[i]
+        num = node.GetNumberOfControlPoints()
+        for point in range(num):
+            if (point % frame_count) == current_frame:
+                node.SetNthControlPointVisibility(point, True)
+
+    def next_test(self):
+        self.test_number = self.test_number + 1
+        self.start_test(self.test_number)
 
 # ------------------- MAIN -------------------
 

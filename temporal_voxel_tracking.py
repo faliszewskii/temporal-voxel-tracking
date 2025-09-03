@@ -495,12 +495,15 @@ class TemporalVoxelTrackingEngine:
         points = self.generateTrack(starting_coords, current_frame, frame_count, self.optical_flow_sequence)
         self.compare_to_truth(points, tracker, starting_coords, current_frame)
 
-    def track_point(self):
+    def track_point(self, is_testing, test_number):
         [current_frame, frame_count] = self.getFramesLegacy()
         nodes = sh.getNodesWithName(id_track_point)
         for node in nodes:
             num = node.GetNumberOfControlPoints()
             for point in range(num):
+                serie = point / frame_count
+                if is_testing and int(serie) != test_number :
+                    continue
                 if ((point+1) % frame_count) == current_frame:
                     node.SetNthControlPointVisibility(point, False)
                 # node.SetNthControlPointSelected(point, (point % frame_count) == current_frame)

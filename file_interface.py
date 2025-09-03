@@ -7,14 +7,14 @@ import numpy as np
 from PIL import Image
 
 
-root_path = f'C:\\Users\\USER\\Documents\\Repositories\\temporal-voxel-tracking\\'
+root_path = f'/home/faliszewskii/Repositories/temporal-voxel-tracking/'
 
 def randomword(length):
    letters = string.ascii_lowercase
    return ''.join(random.choice(letters) for i in range(length))
 
 def savePointWithGT(points, pointsGT, config, time):
-    path = root_path + f'results\\transform_test_results_{randomword(6)}.csv'
+    path = root_path + f'results/transform_test_results_{randomword(6)}.csv'
     # path = f'/home/faliszewskii/Repositories/temporal-voxel-tracking/results/transform_test_results_{randomword(6)}.csv'
 
     with open(path, 'a') as csvfile:
