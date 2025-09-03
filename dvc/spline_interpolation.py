@@ -42,7 +42,7 @@ class Spline5Interpolator3d:
             reshape_dims[d] = freq_kernel.shape[0]
             freq_kernel = freq_kernel.reshape(reshape_dims)
 
-            result = ifft(freq_data / freq_kernel, axis=d)
+            result = ifft(freq_data / freq_kernel, axis=d) # TODO Do I really have to ifft it every loop?
 
         return np.real(result)
 
@@ -57,8 +57,8 @@ class Spline5Interpolator3d:
         uncached_indices = indices[~is_cached]
 
         if len(uncached_fxs) > 0:
-            print(f'Uncached indices: {len(uncached_indices)}')
-            print(f'Dictionary size: {len(self.basis_matrix_dictionary)}')
+            # print(f'Uncached indices: {len(uncached_indices)}')
+            # print(f'Dictionary size: {len(self.basis_matrix_dictionary)}')
 
             N = uncached_fxs.shape[0]
             ix = uncached_fxs[:, 0][:, None] + self.ox[None, :] + self.padding  # (N, 216)

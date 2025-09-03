@@ -72,7 +72,8 @@ class TemporalVoxelTrackingPlugin:
         load_menu = main_menu_bar.addMenu("Load")
         load_menu.setObjectName("LoadMenu")
 
-        self.add_action(optical_flow_menu, "Calculate optical flow for selected", self.on_calculate_optical_flow_action_triggered)
+        self.add_action(optical_flow_menu, "Calculate optical flow for selected",
+                        self.on_calculate_optical_flow_action_triggered)
         optical_flow_menu.addSeparator()
         self.add_action(optical_flow_menu, "Show Optical Flow Magnitudes", self.on_show_magnitudes_action_triggered)
         self.add_action(optical_flow_menu, "Show Optical Flow Vectors", self.on_show_vectors_action_triggered)
@@ -81,11 +82,16 @@ class TemporalVoxelTrackingPlugin:
         self.add_action(optical_flow_menu, "Track Volume", self.on_track_volume_action_triggered)
         self.add_action(optical_flow_menu, "Track Mesh", self.on_track_mesh_action_triggered)
 
-        self.add_action(generate_menu, "Generate Static Cube", lambda _: self.generate(self.data_generator.generate_static_cube))
-        self.add_action(generate_menu, "Generate Slow Cube", lambda _: self.generate(self.data_generator.generate_slow_cube))
-        self.add_action(generate_menu, "Generate Faster Cube", lambda _: self.generate(self.data_generator.generate_faster_cube))
-        self.add_action(generate_menu, "Generate Random Cube", lambda _: self.generate(self.data_generator.generate_random_cube))
-        self.add_action(generate_menu, "Generate Pulsating Cylinder", lambda _: self.generate(self.data_generator.generate_pulsating_cylinder))
+        self.add_action(generate_menu, "Generate Static Cube",
+                        lambda _: self.generate(self.data_generator.generate_static_cube))
+        self.add_action(generate_menu, "Generate Slow Cube",
+                        lambda _: self.generate(self.data_generator.generate_slow_cube))
+        self.add_action(generate_menu, "Generate Faster Cube",
+                        lambda _: self.generate(self.data_generator.generate_faster_cube))
+        self.add_action(generate_menu, "Generate Random Cube",
+                        lambda _: self.generate(self.data_generator.generate_random_cube))
+        self.add_action(generate_menu, "Generate Pulsating Cylinder",
+                        lambda _: self.generate(self.data_generator.generate_pulsating_cylinder))
 
         self.add_action(generate_frames_menu, "Generate Rotating Frames", self.on_generate_rotation)
         self.add_action(generate_frames_menu, "Generate Pulsating Frames", self.on_generate_pulsation)
@@ -107,19 +113,22 @@ class TemporalVoxelTrackingPlugin:
         self.add_action(abaqus_menu, "Perform resolution test with simulation", self.on_resolution_test_with_simulation)
 
         self.add_action(load_menu, "Load dvc test", self.on_load_dvc_test)
+        self.add_action(load_menu, "Save dvc test (no gt)", self.on_save_dvc_test)
 
     def generate(self, func):
         self.current_data = func()
 
     def on_show_magnitudes_action_triggered(self):
-        selected_node = slicer.mrmlScene.GetNodeByID(slicer.app.layoutManager().sliceWidget('Red').sliceLogic().GetBackgroundLayer().GetVolumeNode().GetID())
+        selected_node = slicer.mrmlScene.GetNodeByID(
+            slicer.app.layoutManager().sliceWidget('Red').sliceLogic().GetBackgroundLayer().GetVolumeNode().GetID())
         if selected_node and selected_node.IsA('vtkMRMLScalarVolumeNode'):
             self.temporal_voxel_tracking_engine.display_magnitude_volume(selected_node)
         else:
             print("no scalar volume selected")
 
     def on_show_vectors_action_triggered(self):
-        selected_node = slicer.mrmlScene.GetNodeByID(slicer.app.layoutManager().sliceWidget('Red').sliceLogic().GetBackgroundLayer().GetVolumeNode().GetID())
+        selected_node = slicer.mrmlScene.GetNodeByID(
+            slicer.app.layoutManager().sliceWidget('Red').sliceLogic().GetBackgroundLayer().GetVolumeNode().GetID())
         if selected_node and selected_node.IsA('vtkMRMLScalarVolumeNode'):
             self.temporal_voxel_tracking_engine.display_vector_field(selected_node, 5, 5)
         else:
@@ -129,7 +138,8 @@ class TemporalVoxelTrackingPlugin:
         print("Calculating Optical Flow...")
         self.temporal_voxel_tracking_engine.create_displacement_map()
         print("Done.")
-        print(f"Optical flow range: {np.min(self.temporal_voxel_tracking_engine.optical_flow_sequence)}, {np.max(self.temporal_voxel_tracking_engine.optical_flow_sequence)}")
+        print(
+            f"Optical flow range: {np.min(self.temporal_voxel_tracking_engine.optical_flow_sequence)}, {np.max(self.temporal_voxel_tracking_engine.optical_flow_sequence)}")
 
     def on_track_point_action_triggered(self):
         active_place_node_id = slicer.util.getNode('vtkMRMLSelectionNodeSingleton').GetActivePlaceNodeID()
@@ -146,23 +156,31 @@ class TemporalVoxelTrackingPlugin:
         if not marker:
             return
         ras2ijk = sh.getRAS2IJKMatrixForFirstAvailableVolume()
-        points = sh.getPointsCoords(marker, ras2ijk)
+        unmasked_points = sh.getPointsCoords(marker, ras2ijk)
         slicer.mrmlScene.RemoveNode(marker)
         frames, currentFrame = sh.getFramesFromFirstAvailable()
-        config = (31, False, 'linear')
+        config = (39, False, "spline5")
+        mask = [
+            1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1,
+            1, 1, 1, 0, 1, 1, 1, 0, 1, 1
 
-        results = np.zeros((len(frames)*len(points), 3))
-        for i in range(len(points)):
-            point = points[i]
-            result, time = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, currentFrame, config)
-            for j in range(len(result)):
-                results[i*len(result) + j] = result[j]
-            print(f"Done: {i} / {len(points)}")
+        ]
+        if (len(mask) != len(unmasked_points)):
+            print("Wrong mask")
+            return
+        points = []
+        mid = 0
+        for i in range(len(unmasked_points)):
+            if mask[i] == mid:
+                points.append(unmasked_points[i])
+
+        results, times, correlations = self.dvc_test(frames, 0, points, config)
 
         ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
         node = sh.createMarkers(results, ijk2ras, 'Algorithm Deduction', '')
         node.GetDisplayNode().SetTextScale(0)
-
+        fi.savePoints(results, correlations, len(points), config, times, f'test\\dct\\result.csv')
 
     def on_dvc_test_point_action_triggered(self):
         pointsA = [
@@ -203,18 +221,18 @@ class TemporalVoxelTrackingPlugin:
         todo()
 
     def generate_transform(self, transformType, frameCount, isCyclical):
-       startFrame, ijkToRas = sh.getFirstFrameFromData()
-       frames = self.frame_generator.generateFrames(startFrame, frameCount, transformType, isCyclical)
-       sh.createSequence(frames, ijkToRas)
+        startFrame, ijkToRas = sh.getFirstFrameFromData()
+        frames = self.frame_generator.generateFrames(startFrame, frameCount, transformType, isCyclical)
+        sh.createSequence(frames, ijkToRas)
 
     @staticmethod
     def rotate(x, t, dim, total):
         rot = np.array([
             [1, 0, 0],
-            [0, np.cos(0.3*t), -np.sin(0.3*t)],
-            [0, np.sin(0.3*t), np.cos(0.3*t)]
+            [0, np.cos(0.3 * t), -np.sin(0.3 * t)],
+            [0, np.sin(0.3 * t), np.cos(0.3 * t)]
         ])
-        return rot @ (x-dim/2) + dim/2
+        return rot @ (x - dim / 2) + dim / 2
 
     def on_generate_rotation(self):
         self.generate_transform(0, 4, False)
@@ -258,16 +276,18 @@ class TemporalVoxelTrackingPlugin:
 
         results = np.zeros((len(frames) * len(startingPoints), 3))
         times = np.zeros((len(startingPoints)))
-        correlations = np.zeros(((len(frames)-1) * len(startingPoints)))
+        correlations = np.zeros(((len(frames) - 1) * len(startingPoints)))
         for i in range(len(startingPoints)):
             point = startingPoints[i]
-            result, time, correlation = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames, spline_interpolators, currentFrame, config)
+            result, time, correlation = self.temporal_voxel_tracking_engine.dvcTrackPoint(point, frames,
+                                                                                          spline_interpolators,
+                                                                                          currentFrame, config)
             times[i] = time
             for j in range(len(result)):
                 results[i * len(result) + j] = result[j]
             for j in range(len(correlation)):
                 correlations[i * len(correlation) + j] = correlation[j]
-            print(f"Done: {i+1} / {len(startingPoints)}")
+            print(f"Done: {i + 1} / {len(startingPoints)}")
 
         return results, times, correlations
 
@@ -277,12 +297,13 @@ class TemporalVoxelTrackingPlugin:
         times = np.zeros((len(startingPoints)))
         for i in range(len(startingPoints)):
             point = startingPoints[i]
-            points, pointsGT, time = self.temporal_voxel_tracking_engine.dvcTrackPointWithGT(point, transform, frames, currentFrame, config)
+            points, pointsGT, time = self.temporal_voxel_tracking_engine.dvcTrackPointWithGT(point, transform, frames,
+                                                                                             currentFrame, config)
             times[i] = time
             for j in range(len(points)):
                 results[i * len(points) + j] = points[j]
                 resultsGT[i * len(pointsGT) + j] = pointsGT[j]
-            print(f"Done: {i+1} / {len(startingPoints)}")
+            print(f"Done: {i + 1} / {len(startingPoints)}")
 
         return results, resultsGT, times
 
@@ -328,7 +349,8 @@ class TemporalVoxelTrackingPlugin:
         range_x = np.array(range(0, dim[0]))
         range_y = np.array(range(0, dim[1]))
         range_z = np.array(range(0, dim[2]))
-        self.perlin_noise = RegularGridInterpolator((range_x, range_y, range_z), perlin_noise, fill_value=0.0, bounds_error=False)
+        self.perlin_noise = RegularGridInterpolator((range_x, range_y, range_z), perlin_noise, fill_value=0.0,
+                                                    bounds_error=False)
 
         print("Perlin noise initialized")
 
@@ -339,7 +361,8 @@ class TemporalVoxelTrackingPlugin:
         range_x = np.array(range(0, dim[0]))
         range_y = np.array(range(0, dim[1]))
         range_z = np.array(range(0, dim[2]))
-        self.perlin_noise = RegularGridInterpolator((range_x, range_y, range_z), perlin_noise, fill_value=0.0, bounds_error=False)
+        self.perlin_noise = RegularGridInterpolator((range_x, range_y, range_z), perlin_noise, fill_value=0.0,
+                                                    bounds_error=False)
 
         print("Perlin noise loaded")
 
@@ -380,7 +403,7 @@ class TemporalVoxelTrackingPlugin:
         transformType = 1
         transform = self.pulsate
 
-        resolutions = (64, 256)#203, 232, 256)
+        resolutions = (64, 256)  #203, 232, 256)
         windows = (31, 31)
         # resolutions = (161, 203, 232, 256)
         for resolution, window in zip(resolutions, windows):
@@ -404,31 +427,32 @@ class TemporalVoxelTrackingPlugin:
             print(f"Starting tracking tests...")
             config = (window, False, 'linear')
             results, resultsGT, times = self.dvc_test_legacy2(transform, frames, 0, points, config)
-            fi.savePointsWithGT(results, resultsGT, [], len(points), config, times, f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
+            fi.savePointsWithGT(results, resultsGT, [], len(points), config, times,
+                                f'test\\resolution_test\\{resolution}\\result_sphere_{resolution}.csv')
             print(f"Saved result_sphere_{resolution}.csv")
 
         # sh.createSequence(animation)
         # sh.createMarkers(results, None, "Alg", "")
 
     def on_load_abaqus_simulation(self):
-        dim = 256
-        data_path = 'abaqus\\coords\\hiper_elastic.npy'
-        simulation_data = fi.loadArray(data_path)
-        frames = self.load_abaqus_simulation(simulation_data, dim)
+        resolution = 100
+        frames = fi.loadArray(f"abaqus\\meshes\\regular80\\{resolution}\\cube_{resolution}.npy")
         sh.createSequence(frames)
+        sliceNode = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
+        slicer.app.applicationLogic().GetSliceLogic(sliceNode).GetBackgroundLayer().SetInterpolationMode(vtk.VTK_RESLICE_NEAREST)
+        slicer.util.forceRenderAllViews()
 
-    def load_abaqus_simulation(self, dim):
-        relDir = 'abaqus\\coords\\hiper_elastic.npy'
+    def load_abaqus_simulation(self, dim, relDir):
         data = fi.loadArray(relDir)
 
-        minX = data[0, 1, 0]
-        minY = data[0, 2, 0]
-        minZ = data[0, 3, 0]
-        maxX = data[0, 1, 0]
-        maxY = data[0, 2, 0]
-        maxZ = data[0, 3, 0]
+        minX = data[0, 0, 0]
+        minY = data[0, 1, 0]
+        minZ = data[0, 2, 0]
+        maxX = data[0, 0, 0]
+        maxY = data[0, 1, 0]
+        maxZ = data[0, 2, 0]
         for i in range(data.shape[0]):
-            vec = data[i, 1:, 0]
+            vec = data[i, :, 0]
             if (minX > vec[0]):
                 minX = vec[0]
             if (minY > vec[1]):
@@ -444,20 +468,51 @@ class TemporalVoxelTrackingPlugin:
         maxCoord = max(maxX, maxY, maxZ)
         minCoord = min(minX, minY, minZ)
 
+        # Generate spheres
+        np.random.seed = 123
+        circles_count_edge = 6
+        cell_count = circles_count_edge
+        cell_length = 1 / cell_count
+        mean_radius = cell_length / 4
+        radius = lambda: mean_radius + np.random.rand() * mean_radius * 0.1
+        offset = lambda: (np.random.rand(3) * 2 - 1) * mean_radius
+        spheres = []
+        for i in range(circles_count_edge):
+            for j in range(circles_count_edge):
+                for k in range(circles_count_edge):
+                    x = (np.array([0.5, 0.5, 0.5]) + np.array([i, j, k])) * cell_length + offset()
+                    spheres.append([x[0], x[1], x[2], radius()])
+
+        for frame in range(data.shape[2]):
+            for i in range(data.shape[0]):
+                vec = data[i, :, frame]
+                vec = (vec - minCoord) / (maxCoord - minCoord)
+                data[i, :, frame] = vec
+
+        points = data[:, :, 0]
+        values = np.zeros(points.shape[0])
+        for i in range(points.shape[0]):
+            px, py, pz = points[i, :]
+            # Check if it is in any sphere
+            isin = False
+            for sphere in spheres:
+                sx, sy, sz, r = sphere
+                if (sx - px) ** 2 + (sy - py) ** 2 + (sz - pz) ** 2 < r ** 2:
+                    isin = True
+                    break
+            if isin:
+                values[i] = 0.5
+            else:
+                values[i] = 1
+
         frames = []
         for frame in range(data.shape[2]):
             print(f"Interpolating frame: {frame}")
-            for i in range(data.shape[0]):
-                vec = data[i, 1:, frame]
-                vec = (vec - minCoord) / (maxCoord - minCoord)
-                data[i, 1:, frame] = vec
-
             grid_x, grid_y, grid_z = np.mgrid[0:1:complex(dim), 0:1:complex(dim), 0:1:complex(dim)]
-            points = data[:, 1:4, frame]
-            values = data[:, 0, frame]
-
-            maxValue = np.max(values)
-            values = (values + 1) / (maxValue + 1)
+            points = data[:, :, frame]
+            # values = data[:, 0, frame]
+            # maxValue = np.max(values)
+            # values = (values + 1) / (maxValue + 1)
 
             frame0 = scipy.interpolate.griddata(points, values, (grid_x, grid_y, grid_z), fill_value=0.0, rescale=False,
                                                 method='linear')
@@ -465,22 +520,69 @@ class TemporalVoxelTrackingPlugin:
         return frames
 
     def create_starters(self, data, dim):
+
+        # points = []
+        # points_edge_count = 5
+        # points_distance = 0.15
+        #
+        # # XY range: 0.25 to 0.75
+        # start_xy = 0.25
+        # end_xy = 0.75
+        #
+        # # Compute spacing based on desired edge count
+        # points_distance_x = (end_xy - start_xy) / (points_edge_count - 1)
+        #
+        # z_fixed = 0.5  # z stays constant, since it's an xy-plane
+        #
+        # for i in range(points_edge_count):
+        #     for j in range(points_edge_count):
+        #         x = start_xy + i * points_distance_x
+        #         y = start_xy + j * points_distance_x
+        #         x *= dim
+        #         y *= dim
+        #         z = z_fixed
+        #         points.append(np.array([x, y, z]))
+        #
+        # points = np.array(points)
+
+        # SPHERE
+        # points = []
+        # num_points = 100  # choose how many random points you want
+        # radius = dim / 4  # sphere radius
+        # center = np.array([dim / 2, dim / 2, dim / 2])  # sphere at cube center
+        #
+        # while len(points) < num_points:
+        #     # Generate random point in cube bounding the sphere
+        #     point = center + (np.random.rand(3) - 0.5) * 2 * radius
+        #     # Keep only points inside sphere
+        #     if np.linalg.norm(point - center) <= radius:
+        #         points.append(point)
+        #
+        # points = np.array(points)
+
+        # CUBE GRID
         points = []
-        points_edge_count = 2
-        points_distance = 0.15
-        first_point = (1 - (points_edge_count - 1) * points_distance) / 2
+        points_edge_count = 9
+        gridSide = 0.36
+        points_distance = 1 / (points_edge_count-1) * gridSide
         for i in range(points_edge_count):
             for j in range(points_edge_count):
                 for k in range(points_edge_count):
-                    x = np.repeat(first_point, 3) + np.array([i, j, k]) * points_distance
+                    x = np.array([i, j, k]) * points_distance + (1-gridSide)/2
                     x *= dim
                     points.append(x)
+
+        # points = []
+        # x = np.array([0.3, 0.3, 0.3]) * dim
+        # points.append(x)
+        # x = np.array([0.4, 0.4, 0.4]) * dim
+        # points.append(x)
 
         # For each marker find the closest data point
         starters = []
         ground_truths = []
         data_count = data.shape[0]
-        data_points = data[:, 1:, 0]
+        data_points = data[:, :, 0]
         for point in points:
             point = np.array(point) / np.array(dim)
 
@@ -489,7 +591,7 @@ class TemporalVoxelTrackingPlugin:
 
             index_min = min(range(data_count), key=key_func)
             starters.append(data_points[index_min, :] * np.array(dim))
-            ground_truth = np.transpose(data[index_min, 1:, :])
+            ground_truth = np.transpose(data[index_min, :, :])
             for i in range(ground_truth.shape[0]):
                 ground_truth[i, :] = ground_truth[i, :] * np.array(dim)
             ground_truths.append(ground_truth)
@@ -524,7 +626,8 @@ class TemporalVoxelTrackingPlugin:
         sh.createMarkers(results, ijk2ras, "Algorithm Deduction", "AD-")
         sh.createMarkers(ground_truths, ijk2ras, "Ground Truth", "GT-")
 
-        fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times, f'abaqus\\multiple_test.csv')
+        fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times,
+                            f'abaqus\\multiple_test.csv')
         print(f'abaqus\\multiple_test.csv')
 
     # def on_resolution_test_with_simulation(self):
@@ -557,22 +660,22 @@ class TemporalVoxelTrackingPlugin:
     #     print(result)
 
     def on_resolution_test_with_simulation(self):
-        data_path = 'abaqus\\coords\\hiper_elastic.npy'
+        data_path = 'abaqus\\coords\\regular80.npy'
         simulation_data = fi.loadArray(data_path)
 
         # resolutions = (32, 64)  # 203, 232, 256)
-        windows = (63, )
-        resolutions = (256, )
+        windows = (19,)
+        resolutions = (100,)
         interpolation = "spline5"
         for resolution, window in zip(resolutions, windows):
             print(f'Testing resolution {resolution}')
-            cube_path = f"abaqus\\hiper_elastic_scene\\{resolution}\\cube_{resolution}.npy"
+            cube_path = f"abaqus\\meshes\\regular80\\{resolution}\\cube_{resolution}.npy"
             frames = fi.loadArray(cube_path)
             # frames = np.array([frames[0], frames[frames.shape[0]-1]])  # TEST limit to 2 only
             print(f"Trying to load cube_{resolution}.npy")
             if frames is None:
                 print(f"Generating cube_{resolution}.npy")
-                frames = np.array(self.load_abaqus_simulation(resolution))
+                frames = np.array(self.load_abaqus_simulation(resolution, data_path))
                 fi.saveArray(cube_path, frames)
                 print(f"Generated and saved cube_{resolution}.npy")
             #
@@ -617,18 +720,77 @@ class TemporalVoxelTrackingPlugin:
             config = (window, False, interpolation)
             starters, ground_truths = self.create_starters(simulation_data, resolution)
             results, times, correlations = self.dvc_test(frames, 0, starters, config)
-            fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config, times,
-                                f'abaqus\\hiper_elastic_scene\\{resolution}\\result_cube_{resolution}.csv')
+            fi.savePointsWithGT(results, ground_truths, correlations, len(starters), config,  times,
+                                f'abaqus\\meshes\\regular80\\{resolution}\\result_cube_{resolution}.csv')
             print(f"Saved result_cube_{resolution}.csv")
 
     def on_load_dvc_test(self):
-        resolution = 128
-        frames = fi.loadArray(f"abaqus\\hiper_elastic_scene\\{resolution}\\cube_{resolution}.npy")
+        resolution = 100
+        frames = fi.loadArray(f"abaqus\\meshes\\regular80\\{resolution}\\cube_{resolution}.npy")
+
         sh.createSequence(frames)
-        points, pointsGT = fi.loadPointsWithGT(f'abaqus\\hiper_elastic_scene\\{resolution}\\result_cube_{resolution}.csv')
+        points, pointsGT = fi.loadPointsWithGT(f'abaqus\\meshes\\regular80\\{resolution}\\result_cube_{resolution}.csv')
         ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
-        sh.createMarkers(points, ijk2ras, "Algorithm Deduction", "AD-")
-        sh.createMarkers(pointsGT, ijk2ras, "Ground Truth", "GT-")
+        sh.createMarkers(points, ijk2ras, "Algorithm Deduction", "")
+        sh.createMarkers(points, ijk2ras, "Ground Truth", "")
+        return
+
+        ####
+
+        marker = sh.getSelectedMarker()
+        if not marker:
+            return
+        ras2ijk = sh.getRAS2IJKMatrixForFirstAvailableVolume()
+        points0 = sh.getPointsCoords(marker, ras2ijk)
+        mask0 = [0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
+        slicer.mrmlScene.RemoveNode(marker)
+
+        points = []
+        points1 = fi.loadPoints(f'test/dct/result_1_31.csv')
+        mask1 = [0, 0, 1, 0, 1, 1, 0, 1]
+        points2 = fi.loadPoints(f'test/dct/result_2_31.csv')
+        mask2 = [1, 1, 1, 0, 1]
+        points3 = fi.loadPoints(f'test/dct/crop_23.csv')
+        mask3 = [1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0]
+        points4 = fi.loadPoints(f'test/dct/crop_31.csv')
+        mask4 = [0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1]
+        points5 = fi.loadPoints(f'test/dct/crop_39.csv')
+
+        for i in range(len(mask0)):
+            if mask0[i] == 1:
+                for j in range(0, 10):
+                    points.append(points0[j + i * 10])
+        for i in range(len(mask1)):
+            if mask1[i] == 1:
+                for j in range(0, 10):
+                    points.append(points1[j + i * 10])
+        for i in range(len(mask2)):
+            if mask2[i] == 1:
+                for j in range(0, 10):
+                    points.append(points2[j + i * 10])
+        for i in range(len(mask3)):
+            if mask3[i] == 1:
+                for j in range(0, 10):
+                    points.append(points3[j + i * 10])
+        for i in range(len(mask4)):
+            if mask4[i] == 1:
+                for j in range(0, 10):
+                    points.append(points4[j + i * 10])
+
+        np.concatenate((points, points5))
+
+        ijk2ras = sh.getIJK2RASMatrixForFirstAvailableVolume()
+        sh.createMarkers(points, ijk2ras, "Algorithm Deduction", "")
+        # sh.createMarkers(pointsGT, ijk2ras, "Ground Truth", "GT-")
+
+    def on_save_dvc_test(self):
+        pass
+    #     marker = sh.getSelectedMarker()
+    #     if not marker:
+    #         return
+    #     ras2ijk = sh.getRAS2IJKMatrixForFirstAvailableVolume()
+    #     points = sh.getPointsCoords(marker, ras2ijk)
+    #     fi.savePoints(points)
 
 
 # ------------------- MAIN -------------------

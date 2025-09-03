@@ -83,7 +83,7 @@ def extract_deformed_positions(odbPath, inpPath):
             #     continue
             # print(f'{node.position}, {node.elementLabel}, {node.nodeLabel}, {node.instance.name}')
 
-            node_coords = node_material_map[node.nodeLabel], node.data[0], node.data[1], node.data[2]
+            node_coords = node.data[0], node.data[1], node.data[2]
             frame_positions.append(node_coords[:])
 
         deformed_positions.append(np.array(frame_positions))
@@ -97,14 +97,14 @@ def extract_deformed_positions(odbPath, inpPath):
 
 
 # Example Usage
-odb_path = 'abaqus_odb\\hiper_elastic\\Job-4.odb'
+odb_path = 'abaqus_odb\\regular80\\regular80.odb'
 # odb_path = 'Job-1.odb'
-inp_path = 'abaqus_odb\\hiper_elastic\\Job-4.inp'
+inp_path = 'abaqus_odb\\regular80\\regular80.inp'
 # inp_path = 'Job-1.inp'
 deformed_positions = extract_deformed_positions(odb_path, inp_path)
 
 print(deformed_positions.shape)
-relDir = 'abaqus\\coords\\hiper_elastic.npy'
+relDir = 'abaqus\\coords\\regular80.npy'
 array = deformed_positions
 
 path = root_path + relDir

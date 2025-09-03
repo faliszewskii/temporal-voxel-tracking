@@ -501,8 +501,11 @@ class TemporalVoxelTrackingEngine:
         for node in nodes:
             num = node.GetNumberOfControlPoints()
             for point in range(num):
-                node.SetNthControlPointSelected(point, (point % frame_count) == current_frame)
-
+                if ((point+1) % frame_count) == current_frame:
+                    node.SetNthControlPointVisibility(point, False)
+                # node.SetNthControlPointSelected(point, (point % frame_count) == current_frame)
+                if (point % frame_count) == current_frame:
+                    node.SetNthControlPointVisibility(point, True)
 
     def test_points(self, points):
 

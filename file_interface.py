@@ -44,6 +44,38 @@ def loadArray(relDir):
     with open(path, 'rb') as f:
         return np.load(f)
 
+def savePoints(points, correlations, pointsCount, config, times, relPath=None):
+    path = root_path
+    fileCode = randomword(6)
+    if path is None:
+        path += f'results\\results_{fileCode}.csv'
+    else:
+        path += relPath
+    # path = f'/home/faliszewskii/Repositories/temporal-voxel-tracking/results/transform_test_results_{randomword(6)}.csv'
+
+    frameCount = len(points) // pointsCount
+    with open(path, 'a') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',', lineterminator='\n')
+        labels = ['Window Size', 'Only Translation', 'Interpolation Type', 'Time']
+        for i in range(frameCount):
+            labels += [f"AP_{i}_x", f"AP_{i}_y", f"AP_{i}_z"]
+        for i in range(frameCount-1):
+            labels += [f"COR_{i+1}"]
+        csvwriter.writerow(labels)
+
+        for i in range(pointsCount):
+            row = [config[0], int(config[1]), config[2], times[i]]
+            for frame in range(frameCount):
+                point = points[i * frameCount + frame]
+                row += [point[0], point[1], point[2]]
+            for frame in range(frameCount-1):
+                if len(correlations) == 0:
+                    break
+                row += [correlations[i * (frameCount-1) + frame]]
+            csvwriter.writerow(row)
+
+    print(f"result saved to {path}")
+
 
 def savePointsWithGT(points, pointsGT, correlations, pointsCount, config, times, relPath=None):
     path = root_path
@@ -117,3 +149,31 @@ def loadPointsWithGT(relPath):
             pointsGT.extend(row_pointsGT)
 
     return np.array(points), np.array(pointsGT)
+
+
+def loadPoints(relPath):
+    path = root_path + relPath
+
+    points = []
+    with open(path, 'r') as csvfile:
+        csvreader = csv.reader(csvfile)
+        header = next(csvreader)  # Skip header row
+
+        # Determine number of frames by counting AP_x columns
+        ap_columns = [col for col in header if col.startswith('AP_') and col.endswith('_x')]
+        frameCount = len(ap_columns)
+
+        for row in csvreader:
+            row_points = []
+
+            # Skip first 4 columns (config and time)
+            base_idx = 4
+            # Read points
+            for i in range(frameCount):
+                idx = base_idx + i * 3
+                x, y, z = map(float, row[idx:idx + 3])
+                row_points.append([x, y, z])
+
+            points.extend(row_points)
+
+    return np.array(points)

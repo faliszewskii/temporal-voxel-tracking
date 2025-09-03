@@ -16,9 +16,9 @@ class VoxelTracker:
         points[begin_frame] = np.array(start)
         current_t = begin_frame + 1
 
-        threshold = 0.4  # Least Squares
+        threshold = 0.1  # Least Squares
 
-        usePreviousFrame = True
+        usePreviousFrame = False
 
         if usePreviousFrame:
             for i in range(begin_frame+1, frame_count - begin_frame):
